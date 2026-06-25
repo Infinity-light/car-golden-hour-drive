@@ -465,7 +465,7 @@ state='play';score=0;gameTime=0;speedMul=1;distance=0;
 coinsCollected=0;overtakeCount=0;smashCount=0;maxSpd=0;surviveTime=0;
 currentLane=1;pY=lanes[1]||pYMin;holdUp=false;holdDown=false;laneSwitchCooldown=0;isJumping=false;jumpVel=0;jumpHeight=0;
 obstacles=[];coins=[];cFx=[];nitroPickups=[];powerups=[];smashFx=[];
-nitro=30;nitroActive=false;nitroTimer=0;speedPenalty=0;
+nitro=30;nitroActive=false;nitroTimer=0;superNitro=false;speedPenalty=0;
 powerupTimer=0;activePU={speed:0,shield:0,autoNitro:0,jet:0};
 gear=1;displaySpd=0;
 aiCars=[];aiTimer=0;obsTimer=0;coinTimer=0;nitroPickTimer=0;
@@ -638,14 +638,15 @@ if(speedMul>3.8)speedMul=3.8;
 
 let effSpd=spd;
 if(speedPenalty>0){speedPenalty-=dt;effSpd*=0.45}
-if(activePU.speed>0)effSpd*=1.8;
 if(nitroActive){
-nitroTimer-=dt;effSpd*=2.5;nitro-=dt*30;
-if(nitroTimer<=0||nitro<=0){nitroActive=false;nitroTimer=0;nitro=Math.max(0,nitro)}
-for(let i=0;i<5;i++){
-fireTrail.push({x:W*.3-120*(Math.min(W,H)/850),y:pY+(Math.random()-.5)*18,
-vx:-280-Math.random()*200,vy:(Math.random()-.5)*80,life:1,sz:4+Math.random()*7,
-hue:Math.random()<.5?30:50});
+nitroTimer-=dt;effSpd*=superNitro?3.5:2.5;
+if(!superNitro)nitro-=dt*30;
+if(nitroTimer<=0||(!superNitro&&nitro<=0)){nitroActive=false;nitroTimer=0;superNitro=false;nitro=Math.max(0,nitro)}
+const fp=superNitro?8:5;
+for(let i=0;i<fp;i++){
+fireTrail.push({x:W*.3-120*(Math.min(W,H)/850),y:pY+(Math.random()-.5)*(superNitro?24:18),
+vx:(-280-Math.random()*200)*(superNitro?1.4:1),vy:(Math.random()-.5)*(superNitro?120:80),life:1,sz:(superNitro?6:4)+Math.random()*(superNitro?10:7),
+hue:superNitro?(Math.random()<.3?10:Math.random()<.6?40:60):(Math.random()<.5?30:50)});
 }
 if(Math.random()<.6)speedLines.push({x:W+10,y:Math.random()*H,len:80+Math.random()*180,life:1,sp:1000+Math.random()*600});
 }else if(speedMul>1.8&&Math.random()<speedMul*0.04){
@@ -1904,9 +1905,6 @@ cx.beginPath();cx.ellipse(carX,carY-25*sc-(jumpHeight||0)*sc,80*sc,30*sc,0,0,6.2
 cx.strokeStyle=`rgba(80,160,255,${pulse*.5})`;cx.lineWidth=1.5;
 cx.beginPath();cx.ellipse(carX,carY-25*sc-(jumpHeight||0)*sc,90*sc,35*sc,0,0,6.2832);cx.stroke();
 }
-if(activePU.speed>0&&Math.random()<.5){
-speedLines.push({x:W+10,y:Math.random()*H,len:50+Math.random()*100,life:1,sp:800+Math.random()*500});
-}
 if(activePU.jet>0){
 for(let i=0;i<3;i++){
 const jx=carX+(Math.random()-.5)*60*sc,jy=carY+10*sc;
@@ -2162,15 +2160,6 @@ lg.addColorStop(0,`rgba(255,180,60,${pulse})`);lg.addColorStop(1,'rgba(255,180,6
 cx.fillStyle=lg;cx.fillRect(0,0,edgeW,H);
 lg=cx.createLinearGradient(W,0,W-edgeW,0);
 lg.addColorStop(0,`rgba(255,180,60,${pulse})`);lg.addColorStop(1,'rgba(255,180,60,0)');
-cx.fillStyle=lg;cx.fillRect(W-edgeW,0,edgeW,H);
-}
-if(activePU.speed>0){
-const edgeW=W*.06,pulse=.03+.02*Math.sin(t*10);
-let lg=cx.createLinearGradient(0,0,edgeW,0);
-lg.addColorStop(0,`rgba(255,100,30,${pulse})`);lg.addColorStop(1,'rgba(255,100,30,0)');
-cx.fillStyle=lg;cx.fillRect(0,0,edgeW,H);
-lg=cx.createLinearGradient(W,0,W-edgeW,0);
-lg.addColorStop(0,`rgba(255,100,30,${pulse})`);lg.addColorStop(1,'rgba(255,100,30,0)');
 cx.fillStyle=lg;cx.fillRect(W-edgeW,0,edgeW,H);
 }
 if(activePU.jet>0){
@@ -2625,8 +2614,7 @@ else spd=200*(1+Math.sin(t*.25)*.04);
 let effSpd=spd;
 if(state==='play'){
 if(speedPenalty>0)effSpd*=0.45;
-if(activePU.speed>0)effSpd*=1.8;
-if(nitroActive)effSpd*=2.5;
+if(nitroActive)effSpd*=(superNitro?3.5:2.5);
 }
 
 scroll+=effSpd*dt;
