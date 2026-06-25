@@ -74,7 +74,7 @@ let lanes=[],currentLane=1,laneSwitchCooldown=0,laneWidth=0,roadLaneTop=0;
 let raceTotal=6,racePosition=6,prevPosition=6,posChangeFx=0,posChangeDir=0;
 let speedPenalty=0;
 let countdownTimer=0;
-let raceNPCs=[];
+let raceCars=[],playerCar=null,nextFinishOrder=0;
 let finishAnimTimer=0,finishTriggered=false;
 const RACE_DIST=5000;
 let isJumping=false,jumpVel=0,jumpHeight=0;
@@ -96,6 +96,65 @@ let snowPs=[],petalPs=[],dataPs=[];
 
 const OD={rock:{w:70,h:60},cone:{w:45,h:75},barrier:{w:140,h:65}};
 const AI_COLORS=['#c43030','#2a7a40','#3060a0','#8a5020','#6a3080','#a06030','#2080a0','#904050'];
+
+class RaceCar{
+constructor({lane=0,color='#1c3a58',style=0,isPlayer=false,name='',baseSpeedFactor=1,accelRate=2}={}){
+this.trackPos=0;
+this.speed=0;
+this.lane=lane;
+this.laneY=lanes[lane]||0;
+this.color=color;
+this.style=style;
+this.isPlayer=isPlayer;
+this.name=name;
+this.baseSpeedFactor=baseSpeedFactor;
+this.accelRate=accelRate;
+this.burstFactor=1;
+this.burstTimer=2+Math.random()*3;
+this.laneChangeCD=0;
+this.finished=false;
+this.finishOrder=0;
+}
+getScreenPos(cameraPos){
+const px=W*0.3,rel=this.trackPos-cameraPos;
+let sx,ds,al;
+if(rel>=0){const n=Math.min(rel/800,1);if(n>=1)return null;
+ds=Math.max(0.12,1-n*0.88);sx=lerp(px+60,W*0.95,n);al=n>0.8?lerp(1,0,(n-0.8)/0.2):1}
+else{const n=Math.min(-rel/600,1);if(n>=1)return null;
+ds=Math.max(0.15,1-n*0.7);sx=lerp(px-60,px-W*0.28,n);al=n>0.7?lerp(1,0,(n-0.7)/0.3):1}
+return{x:sx,y:this.laneY,scale:ds,alpha:al};
+}
+updateAI(dt,spdMul,baseSpd,obsList,allCars){
+if(this.finished){this.speed*=Math.pow(0.08,dt);this.trackPos+=this.speed*dt*0.1;
+this.laneY+=(lanes[this.lane]-this.laneY)*Math.min(1,8*dt);return}
+const tgt=baseSpd*spdMul*this.baseSpeedFactor*this.burstFactor;
+this.speed+=(tgt-this.speed)*Math.min(1,this.accelRate*dt);
+this.burstTimer-=dt;
+if(this.burstTimer<=0){this.burstTimer=2+Math.random()*4;this.burstFactor=0.93+Math.random()*0.14}
+this.laneChangeCD=Math.max(0,this.laneChangeCD-dt);
+if(this.laneChangeCD<=0){
+const camPos=allCars.find(c=>c.isPlayer)?.trackPos||0;
+for(const o of obsList){
+const oTrack=camPos+(o.x-W*0.3)*0.1;
+if(getLaneFromY(o.y)===this.lane&&oTrack>this.trackPos&&oTrack<this.trackPos+120){
+this.lane=clamp(this.lane+(this.lane>0&&(this.lane>=LANE_COUNT-1||Math.random()<0.5)?-1:1),0,LANE_COUNT-1);
+this.laneChangeCD=1.5;break}}
+}
+if(this.laneChangeCD<=0){
+for(const other of allCars){
+if(other===this||other.isPlayer)continue;
+if(other.lane===this.lane&&Math.abs(other.trackPos-this.trackPos)<50&&other.trackPos>this.trackPos){
+this.lane=clamp(this.lane+(this.lane>0&&(this.lane>=LANE_COUNT-1||Math.random()<0.5)?-1:1),0,LANE_COUNT-1);
+this.laneChangeCD=2;break}}
+}
+if(this.laneChangeCD<=0&&Math.random()<0.002){
+this.lane=clamp(this.lane+(Math.random()<0.5?-1:1),0,LANE_COUNT-1);this.laneChangeCD=2}
+this.laneY+=(lanes[this.lane]-this.laneY)*Math.min(1,8*dt);
+this.trackPos+=this.speed*dt*0.1;
+if(this.trackPos>=RACE_DIST)this.finished=true;
+}
+}
+function getLaneFromY(y){let best=0,minD=Infinity;for(let i=0;i<LANE_COUNT;i++){const d=Math.abs(y-lanes[i]);if(d<minD){minD=d;best=i}}return best}
 
 let saveData={bestFreeRun:0,tracks:TRACKS.map((_,i)=>({unlocked:i===0,best:0,stars:0})),showTouch:'auto'};
 function loadSave(){try{const d=JSON.parse(localStorage.getItem('sr_save'));if(d&&d.tracks){saveData=d;if(!saveData.showTouch)saveData.showTouch='auto';while(saveData.tracks.length<TRACKS.length)saveData.tracks.push({unlocked:false,best:0,stars:0})}}catch(e){}}
@@ -474,7 +533,7 @@ shakeAmt=0;flashA=0;
 raceTotal=6;
 curEnvIdx=0;envWelcomeTimer=2.5;snowPs=[];petalPs=[];dataPs=[];
 racePosition=raceTotal;prevPosition=raceTotal;posChangeFx=0;
-raceNPCs=[];finishTriggered=false;finishAnimTimer=0;
+raceCars=[];playerCar=null;nextFinishOrder=0;finishTriggered=false;finishAnimTimer=0;
 updateTouchVis();
 ensureAudio();startBGM(curEnvIdx);startEngine();
 }
@@ -482,15 +541,18 @@ function startTournament(idx){
 curTrack=idx;mode='tournament';startGame();
 state='countdown';countdownTimer=4;prevCountdownSec=4;
 raceTotal=4;racePosition=4;prevPosition=4;
-const npcLanes=[0,2,3],npcColors=['#c43030','#2a7a40','#3060a0'];
 const diff=TRACKS[curTrack].diff||1;
-raceNPCs=[];
+const npcLanes=[0,2,3],npcColors=['#c43030','#2a7a40','#3060a0'],npcNames=['红队','绿队','蓝队'];
 const paces=[0.88+Math.random()*0.06+diff*0.02,0.95+Math.random()*0.06+diff*0.02,1.01+Math.random()*0.06+diff*0.02];
 for(let i=paces.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[paces[i],paces[j]]=[paces[j],paces[i]]}
+playerCar=new RaceCar({lane:1,isPlayer:true,name:'玩家'});
+playerCar.laneY=lanes[1];
+raceCars=[playerCar];nextFinishOrder=0;
 for(let i=0;i<3;i++){
-raceNPCs.push({lane:npcLanes[i],y:lanes[npcLanes[i]],color:npcColors[i],style:i,
-raceDistance:0,racePace:paces[i],
-currentSpeed:0,spdTimer:2+Math.random()*3,burstFactor:1,accelRate:1.2+Math.random()*1.5});
+const npc=new RaceCar({lane:npcLanes[i],color:npcColors[i],style:i,name:npcNames[i],
+baseSpeedFactor:paces[i],accelRate:1.2+Math.random()*1.5});
+npc.laneY=lanes[npcLanes[i]];
+raceCars.push(npc);
 }
 aiCars=[];
 }
@@ -626,8 +688,10 @@ if(mode==='tournament'&&finishTriggered){
 finishAnimTimer-=dt;gameTime+=dt;
 speedMul*=Math.pow(0.08,dt);if(speedMul<0.02)speedMul=0.02;
 distance+=spd*dt*0.1;
+if(playerCar)playerCar.trackPos=distance;
 const curSpd=spd*.3;displaySpd+=(curSpd-displaySpd)*Math.min(1,8*dt);
-for(const npc of raceNPCs){npc.currentSpeed*=Math.pow(0.08,dt);npc.raceDistance+=npc.currentSpeed*dt*0.1}
+const npcMul=Math.min(1+gameTime*0.008*(TRACKS[curTrack].diff||1),3.8);
+for(const car of raceCars){if(!car.isPlayer)car.updateAI(dt,npcMul,baseSpd,obstacles,raceCars)}
 if(finishAnimTimer<=0)completeLevel();
 return;
 }
@@ -663,7 +727,10 @@ score+=dt*100*speedMul*(nitroActive?1.5:1);
 distance+=effSpd*dt*.1;
 if(mode==='freerun'){const ni=getEnvIdx(distance);if(ni!==curEnvIdx){curEnvIdx=ni;envWelcomeTimer=3;snowPs=[];petalPs=[];dataPs=[];switchBGMTheme(ni)}}
 if(envWelcomeTimer>0)envWelcomeTimer-=dt;
-if(mode==='tournament'&&!finishTriggered&&distance>=RACE_DIST){finishTriggered=true;finishAnimTimer=2.5;shakeAmt=.5;flashA=.4;flashC='255,220,100'}
+if(mode==='tournament'&&!finishTriggered&&distance>=RACE_DIST){
+finishTriggered=true;finishAnimTimer=2.5;shakeAmt=.5;flashA=.4;flashC='255,220,100';
+if(playerCar&&!playerCar.finished){playerCar.finished=true;playerCar.finishOrder=++nextFinishOrder}
+}
 
 if(laneSwitchCooldown>0)laneSwitchCooldown-=dt;
 if(holdUp&&laneSwitchCooldown<=0&&currentLane>0){currentLane--;laneSwitchCooldown=0.16}
@@ -741,19 +808,15 @@ prevPosition=racePosition;
 spawnOvertakeFx(a.x,a.y,'被超越',0);
 }}
 if(posChangeFx>0)posChangeFx-=dt;
-if(mode==='tournament'&&raceNPCs.length>0){
-const diff=TRACKS[curTrack].diff||1;
-const npcSpeedMul=Math.min(1+gameTime*0.008*diff,3.8);
-for(const npc of raceNPCs){
-const tgtSpd=baseSpd*npcSpeedMul*npc.racePace*npc.burstFactor;
-npc.currentSpeed+=(tgtSpd-npc.currentSpeed)*Math.min(1,npc.accelRate*dt);
-npc.spdTimer-=dt;
-if(npc.spdTimer<=0){npc.spdTimer=2+Math.random()*4;npc.burstFactor=0.93+Math.random()*0.14}
-if(Math.random()<0.002){const dir=Math.random()<0.5?-1:1;npc.lane=clamp(npc.lane+dir,0,LANE_COUNT-1)}
-npc.y+=(lanes[npc.lane]-npc.y)*Math.min(1,8*dt);
-npc.raceDistance+=npc.currentSpeed*dt*0.1;
+if(mode==='tournament'&&raceCars.length>1){
+const npcMul=Math.min(1+gameTime*0.008*(TRACKS[curTrack].diff||1),3.8);
+if(playerCar){playerCar.trackPos=distance;playerCar.speed=effSpd;playerCar.lane=currentLane;playerCar.laneY=pY}
+for(const car of raceCars){
+if(car.isPlayer)continue;
+car.updateAI(dt,npcMul,baseSpd,obstacles,raceCars);
+if(car.trackPos>=RACE_DIST&&!car.finished){car.finished=true;car.finishOrder=++nextFinishOrder}
 }
-let pos=1;for(const npc of raceNPCs){if(npc.raceDistance>distance)pos++}
+let pos=1;for(const car of raceCars){if(!car.isPlayer&&car.trackPos>distance)pos++}
 if(pos!==racePosition){
 if(pos<racePosition){posChangeFx=1.5;posChangeDir=-1}else{posChangeFx=1.5;posChangeDir=1}
 racePosition=pos;prevPosition=pos;
@@ -2275,8 +2338,8 @@ drawGlassPanel(pbX-3,pbY-3,pbW+6,pbH+6,5,'rgba(230,180,80,0.1)');
 const pg=cx.createLinearGradient(pbX,0,pbX+pbW*prog,0);
 pg.addColorStop(0,'rgba(255,200,80,0.6)');pg.addColorStop(1,'rgba(255,140,40,0.85)');
 cx.fillStyle=pg;cx.fillRect(pbX,pbY,pbW*prog,pbH);
-for(const npc of raceNPCs){const np=Math.min(1,npc.raceDistance/target);
-cx.fillStyle=npc.color;cx.globalAlpha=0.8;cx.beginPath();cx.arc(pbX+pbW*np,pbY+pbH/2,3.5,0,6.2832);cx.fill();cx.globalAlpha=1}
+for(const car of raceCars){if(car.isPlayer)continue;const np=Math.min(1,car.trackPos/target);
+cx.fillStyle=car.color;cx.globalAlpha=0.8;cx.beginPath();cx.arc(pbX+pbW*np,pbY+pbH/2,3.5,0,6.2832);cx.fill();cx.globalAlpha=1}
 cx.fillStyle='#4488cc';cx.beginPath();cx.arc(pbX+pbW*prog,pbY+pbH/2,4.5,0,6.2832);cx.fill();
 cx.strokeStyle='rgba(255,255,255,0.7)';cx.lineWidth=1.2;cx.beginPath();cx.arc(pbX+pbW*prog,pbY+pbH/2,4.5,0,6.2832);cx.stroke();
 const distY=pbY+pbH+Math.max(12,fs*0.5);
@@ -2497,25 +2560,24 @@ cx.restore();
 }
 
 function drawRaceNPCs(){
-if(mode!=='tournament'||!raceNPCs.length)return;
+if(mode!=='tournament'||raceCars.length<=1)return;
 const sc=Math.min(W,H)/850,px=W*0.3;
-const sorted=[...raceNPCs].sort((a,b)=>b.raceDistance-a.raceDistance);
-for(const npc of sorted){
+const npcs=raceCars.filter(c=>!c.isPlayer);
+const sorted=[...npcs].sort((a,b)=>b.trackPos-a.trackPos);
+for(const car of sorted){
 let sx,ds=1,al=1;
-const ny=state==='countdown'?lanes[npc.lane]:npc.y;
+const ny=state==='countdown'?lanes[car.lane]:car.laneY;
 if(state==='countdown'){
 const vib=countdownTimer<1?3:1.5;
 sx=px+(Math.random()-0.5)*vib;
+} else {
+const pos=car.getScreenPos(distance);
+if(!pos)continue;
+sx=pos.x;ds=pos.scale;al=pos.alpha;
 }
-else{
-const rd=npc.raceDistance-distance;
-if(rd>0){const n=Math.min(rd/800,1);if(n>=1)continue;
-ds=Math.max(0.12,1-n*0.88);sx=lerp(px+60,W*0.95,n);al=n>0.8?lerp(1,0,(n-0.8)/0.2):1}
-else{const n=Math.min(-rd/600,1);if(n>=1)continue;
-ds=Math.max(0.15,1-n*0.7);sx=lerp(px-60,px-W*0.28,n);al=n>0.7?lerp(1,0,(n-0.7)/0.3):1}}
 cx.save();cx.globalAlpha=al;
 if(ds!==1){cx.translate(sx,ny);cx.scale(ds,ds);cx.translate(-sx,-ny)}
-drawAiCar({x:sx,y:ny,smashed:false,entryAlpha:1,color:npc.color,style:npc.style,w:110*sc,h:44*sc});
+drawAiCar({x:sx,y:ny,smashed:false,entryAlpha:1,color:car.color,style:car.style,w:110*sc,h:44*sc});
 cx.restore();
 }}
 
