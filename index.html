@@ -6,9 +6,9 @@
 <title>赛博竞速</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;height:100%;overflow:hidden;background:#05000a;touch-action:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;font-family:'Microsoft YaHei','PingFang SC','Segoe UI',system-ui,sans-serif}
+html,body{width:100%;height:100%;overflow:hidden;background:#080c1a;touch-action:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;font-family:'Microsoft YaHei','PingFang SC','Segoe UI',system-ui,sans-serif}
 canvas{display:block}
-#ctrl{position:fixed;bottom:0;left:0;right:0;display:none;justify-content:space-between;align-items:center;padding:8px 16px calc(env(safe-area-inset-bottom,0px) + 10px);z-index:10;pointer-events:none;background:rgba(8,4,20,0.75);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid rgba(0,255,255,0.12)}
+#ctrl{position:fixed;bottom:0;left:0;right:0;display:none;justify-content:space-between;align-items:center;padding:8px 16px calc(env(safe-area-inset-bottom,0px) + 10px);z-index:10;pointer-events:none;background:rgba(10,14,30,0.7);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid rgba(0,255,255,0.18)}
 #ctrl.show{display:flex}
 .bg{display:flex;gap:8px;pointer-events:auto}
 .bg.left{flex-direction:column;gap:6px}
@@ -30,7 +30,7 @@ canvas{display:block}
 </div>
 <script>
 const cv=document.getElementById('c'),cx=cv.getContext('2d');
-let W,H,roadY;
+let W,H,roadY,DPR=1;
 
 const TRACKS=[
 {name:'霓虹高速',sub:'初入赛博世界',target:2200,stars:[4000,8000,14000],diff:1,
@@ -82,7 +82,11 @@ return l===0?roadY+rH*0.22:roadY+rH*0.62;
 }
 
 function resize(){
-W=cv.width=innerWidth;H=cv.height=innerHeight;
+DPR=window.devicePixelRatio||1;
+W=innerWidth;H=innerHeight;
+cv.width=W*DPR;cv.height=H*DPR;
+cv.style.width=W+'px';cv.style.height=H+'px';
+cx.setTransform(DPR,0,0,DPR,0,0);
 roadY=H*0.55;
 pTgtY=laneY(pLane);pY=pTgtY;
 for(const o of obstacles)o.y=laneY(o.lane);
@@ -475,16 +479,25 @@ updateTouchVis();
 // ====== DRAWING ======
 
 function drawSky(){
+const c=ac();
 const g=cx.createLinearGradient(0,0,0,roadY);
-g.addColorStop(0,'#020008');g.addColorStop(0.3,'#060018');g.addColorStop(0.6,'#0c0028');g.addColorStop(1,'#140038');
+g.addColorStop(0,'#0a1628');
+g.addColorStop(0.25,'#0e2040');
+g.addColorStop(0.5,`rgba(${Math.floor(c[0]*.08+14)},${Math.floor(c[1]*.06+24)},${Math.floor(c[2]*.12+55)},1)`);
+g.addColorStop(0.75,`rgba(${Math.floor(c[0]*.12+18)},${Math.floor(c[1]*.08+28)},${Math.floor(c[2]*.15+65)},1)`);
+g.addColorStop(1,`rgba(${Math.floor(c[0]*.15+22)},${Math.floor(c[1]*.1+32)},${Math.floor(c[2]*.2+75)},1)`);
 cx.fillStyle=g;cx.fillRect(0,0,W,roadY+2);
+const hg=cx.createLinearGradient(0,roadY*.5,0,roadY);
+hg.addColorStop(0,'rgba(0,0,0,0)');
+hg.addColorStop(1,`rgba(${Math.floor(c[0]*.2)},${Math.floor(c[1]*.15)},${Math.floor(c[2]*.25)},0.15)`);
+cx.fillStyle=hg;cx.fillRect(0,0,W,roadY+2);
 }
 
 function drawStars(){
 const c=ac();
 for(const s of stars){
-const a=.2+.15*Math.sin(t*1.5+s.tw);
-const r=Math.floor(200+c[0]*.2),g2=Math.floor(200+c[1]*.2),b=Math.floor(220+c[2]*.2);
+const a=.35+.25*Math.sin(t*1.5+s.tw);
+const r=Math.floor(210+c[0]*.3),g2=Math.floor(210+c[1]*.3),b=Math.floor(230+c[2]*.3);
 cx.fillStyle=`rgba(${r},${g2},${b},${a})`;
 cx.beginPath();cx.arc(s.x*W,s.y*H,s.r,0,6.2832);cx.fill();
 }
@@ -492,13 +505,16 @@ cx.beginPath();cx.arc(s.x*W,s.y*H,s.r,0,6.2832);cx.fill();
 
 function drawNeonOrb(){
 const c=ac();
-const sx=W*0.6,sy=roadY*0.85;
-const sr=Math.min(W,H)*.04;
-const g1=cx.createRadialGradient(sx,sy,sr*.2,sx,sy,sr*7);
-g1.addColorStop(0,acA(c,0.15));g1.addColorStop(.3,acA(c,0.04));g1.addColorStop(1,acA(c,0));
+const sx=W*0.6,sy=roadY*0.75;
+const sr=Math.min(W,H)*.055;
+const g0=cx.createRadialGradient(sx,sy,sr*.5,sx,sy,sr*12);
+g0.addColorStop(0,acA(c,0.25));g0.addColorStop(.2,acA(c,0.1));g0.addColorStop(.5,acA(c,0.03));g0.addColorStop(1,acA(c,0));
+cx.fillStyle=g0;cx.fillRect(0,0,W,roadY+2);
+const g1=cx.createRadialGradient(sx,sy,sr*.1,sx,sy,sr*5);
+g1.addColorStop(0,acA(c,0.3));g1.addColorStop(.4,acA(c,0.08));g1.addColorStop(1,acA(c,0));
 cx.fillStyle=g1;cx.fillRect(0,0,W,roadY+2);
 const g2=cx.createRadialGradient(sx,sy,0,sx,sy,sr);
-g2.addColorStop(0,'#fff');g2.addColorStop(.3,acA(c,0.9));g2.addColorStop(1,acA(c,0.4));
+g2.addColorStop(0,'rgba(255,255,255,0.95)');g2.addColorStop(.2,'#fff');g2.addColorStop(.5,acA(c,0.9));g2.addColorStop(1,acA(c,0.5));
 cx.fillStyle=g2;cx.beginPath();cx.arc(sx,sy,sr,0,6.2832);cx.fill();
 }
 
@@ -509,22 +525,22 @@ for(const b of blds){
 let x=((b.pos-off%span)%span+span)%span-60;
 if(x<-b.w*scaleF||x>W+20)continue;
 const bw=b.w*scaleF,bh=b.h*scaleF;
-cx.fillStyle=`rgba(${8+c[0]*.02},${4+c[1]*.01},${15+c[2]*.03},0.9)`;
+cx.fillStyle=`rgba(${14+c[0]*.06},${12+c[1]*.04},${28+c[2]*.08},0.92)`;
 cx.fillRect(x,baseY-bh,bw,bh);
 const ws=3*scaleF,wg=6*scaleF;
 for(let wy=baseY-bh+ws*2;wy<baseY-ws;wy+=wg){
 for(let wx=x+ws;wx<x+bw-ws;wx+=wg){
-if(hash(wx*17.3+wy*31.7+b.seed)>0.55){
+if(hash(wx*17.3+wy*31.7+b.seed)>0.5){
 const bright=hash(wx*7.1+wy*13.3+b.seed*2);
-if(bright>0.7)cx.fillStyle=acA(c,0.4+bright*0.3);
-else cx.fillStyle=`rgba(200,180,255,${0.15+bright*0.2})`;
+if(bright>0.65)cx.fillStyle=acA(c,0.55+bright*0.35);
+else cx.fillStyle=`rgba(220,200,255,${0.2+bright*0.3})`;
 cx.fillRect(wx,wy,ws*0.55,ws*0.7);
 }
 }
 }
-if(hash(b.seed*3.7)>0.6){
+if(hash(b.seed*3.7)>0.5){
 const signY=baseY-bh-2;
-cx.fillStyle=acA(c,0.3+0.15*Math.sin(t*2+b.seed));
+cx.fillStyle=acA(c,0.45+0.2*Math.sin(t*2+b.seed));
 cx.fillRect(x+bw*.1,signY,bw*.8,3*scaleF);
 }
 }
@@ -534,13 +550,16 @@ cx.restore();
 function drawRoad(){
 const c=ac();
 const g=cx.createLinearGradient(0,roadY,0,H);
-g.addColorStop(0,'#141018');g.addColorStop(0.15,'#100c16');g.addColorStop(0.5,'#0c0a12');g.addColorStop(1,'#08060e');
+g.addColorStop(0,`rgba(${18+c[0]*.04},${16+c[1]*.03},${30+c[2]*.06},1)`);
+g.addColorStop(0.15,`rgba(${15+c[0]*.03},${13+c[1]*.02},${26+c[2]*.05},1)`);
+g.addColorStop(0.5,'#141220');
+g.addColorStop(1,'#10101a');
 cx.fillStyle=g;cx.fillRect(0,roadY,W,H-roadY);
 
-cx.fillStyle=acA(c,0.12);cx.fillRect(0,roadY-1,W,3);
-cx.fillStyle=acA(c,0.04);cx.fillRect(0,roadY+2,W,2);
+cx.fillStyle=acA(c,0.22);cx.fillRect(0,roadY-1,W,3);
+cx.fillStyle=acA(c,0.08);cx.fillRect(0,roadY+2,W,2);
 
-cx.strokeStyle=acA(c,0.03);cx.lineWidth=0.5;
+cx.strokeStyle=acA(c,0.06);cx.lineWidth=0.5;
 for(let y=roadY+30;y<H;y+=35){cx.beginPath();cx.moveTo(0,y);cx.lineTo(W,y);cx.stroke()}
 }
 
@@ -549,15 +568,15 @@ const c=ac();
 const dashLen=45,gapLen=65,total=dashLen+gapLen;
 const my=roadY+(H-roadY)*0.35;
 
-cx.fillStyle=acA(c,0.6);
+cx.fillStyle=acA(c,0.75);
 for(let i=-1;i<W/total+2;i++)cx.fillRect(i*total-(off%total),my,dashLen,3);
 
-cx.save();cx.shadowColor=acS(c);cx.shadowBlur=10;
-cx.fillStyle=acA(c,0.3);
+cx.save();cx.shadowColor=acS(c);cx.shadowBlur=14;
+cx.fillStyle=acA(c,0.4);
 for(let i=-1;i<W/total+2;i++)cx.fillRect(i*total-(off%total),my,dashLen,3);
 cx.restore();
 
-cx.fillStyle=acA(c,0.08);
+cx.fillStyle=acA(c,0.14);
 cx.fillRect(0,roadY+(H-roadY)*0.12,W,1);
 cx.fillRect(0,roadY+(H-roadY)*0.85,W,1);
 }
@@ -568,16 +587,16 @@ const baseY=roadY,pH=H*.12;
 for(let i=-1;i<W/LAMP_SPACING+2;i++){
 const px=i*LAMP_SPACING-(off%LAMP_SPACING);
 if(px<-40||px>W+40)continue;
-cx.strokeStyle='rgba(40,30,60,0.6)';cx.lineWidth=3;
+cx.strokeStyle='rgba(50,40,80,0.7)';cx.lineWidth=3;
 cx.beginPath();cx.moveTo(px,baseY+2);cx.lineTo(px,baseY-pH);cx.stroke();
-cx.fillStyle=acA(c,0.5+0.2*Math.sin(t*3+i*1.7));
+cx.fillStyle=acA(c,0.7+0.25*Math.sin(t*3+i*1.7));
+cx.beginPath();cx.arc(px,baseY-pH,5,0,6.2832);cx.fill();
+cx.save();cx.shadowColor=acS(c);cx.shadowBlur=22;cx.globalAlpha=.5;
 cx.beginPath();cx.arc(px,baseY-pH,4,0,6.2832);cx.fill();
-cx.save();cx.shadowColor=acS(c);cx.shadowBlur=15;cx.globalAlpha=.3;
-cx.beginPath();cx.arc(px,baseY-pH,3,0,6.2832);cx.fill();
 cx.restore();
-const lg=cx.createRadialGradient(px,baseY-pH+10,0,px,baseY-pH+10,60);
-lg.addColorStop(0,acA(c,0.06));lg.addColorStop(1,acA(c,0));
-cx.fillStyle=lg;cx.fillRect(px-60,baseY-pH,120,pH+5);
+const lg=cx.createRadialGradient(px,baseY-pH+10,0,px,baseY-pH+10,80);
+lg.addColorStop(0,acA(c,0.12));lg.addColorStop(.5,acA(c,0.03));lg.addColorStop(1,acA(c,0));
+cx.fillStyle=lg;cx.fillRect(px-80,baseY-pH,160,pH+5);
 }
 }
 
@@ -741,7 +760,7 @@ if(nitroActive){cx.scale(1.03,1);cx.translate(-4,0)}
 
 cx.fillStyle='rgba(0,0,0,0.22)';cx.beginPath();cx.ellipse(5,18-bounce/sc,128,9,0,0,6.2832);cx.fill();
 
-cx.fillStyle='#0a1a2a';cx.beginPath();
+cx.fillStyle='#0e2238';cx.beginPath();
 cx.moveTo(128,6);cx.lineTo(132,-2);cx.quadraticCurveTo(133,-18,128,-28);cx.lineTo(112,-34);
 cx.lineTo(62,-37);cx.lineTo(38,-72);cx.quadraticCurveTo(5,-80,-25,-76);
 cx.lineTo(-52,-62);cx.lineTo(-72,-42);cx.lineTo(-88,-37);cx.lineTo(-112,-34);
@@ -892,8 +911,8 @@ if(Math.random()<.003){flashA=Math.max(flashA,.5);flashC='180,190,255';shakeAmt=
 }
 
 function drawVignette(){
-const vg=cx.createRadialGradient(W*.5,H*.45,W*.2,W*.5,H*.5,W*.9);
-vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,`rgba(0,0,0,${nitroActive?.65:.5})`);
+const vg=cx.createRadialGradient(W*.5,H*.45,W*.25,W*.5,H*.5,W*.95);
+vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,`rgba(0,0,0,${nitroActive?.5:.32})`);
 cx.fillStyle=vg;cx.fillRect(0,0,W,H);
 }
 
@@ -917,9 +936,9 @@ cx.closePath();
 }
 
 function drawGlassPanel(x,y,w,h,r,bc){
-cx.fillStyle='rgba(8,4,20,0.65)';
+cx.fillStyle='rgba(10,12,30,0.6)';
 roundRect(x,y,w,h,r);cx.fill();
-cx.strokeStyle=bc||'rgba(0,255,255,0.15)';cx.lineWidth=1;
+cx.strokeStyle=bc||'rgba(0,255,255,0.2)';cx.lineWidth=1;
 roundRect(x,y,w,h,r);cx.stroke();
 }
 
@@ -995,7 +1014,7 @@ cx.restore();
 
 function drawMenu(){
 const c=ac();
-cx.fillStyle='rgba(5,0,12,0.7)';cx.fillRect(0,0,W,H);
+cx.fillStyle='rgba(8,10,25,0.6)';cx.fillRect(0,0,W,H);
 
 for(let i=0;i<3;i++){
 const lx=Math.random()*W,ly=Math.random()*H*.5;
@@ -1044,7 +1063,7 @@ cx.restore();
 
 function drawTrackSelect(){
 const c=ac();
-cx.fillStyle='rgba(5,0,12,0.7)';cx.fillRect(0,0,W,H);
+cx.fillStyle='rgba(8,10,25,0.6)';cx.fillRect(0,0,W,H);
 cx.save();cx.textAlign='center';cx.textBaseline='middle';
 
 const tf=Math.max(18,Math.min(W*.04,H*.04));
@@ -1068,7 +1087,7 @@ const tac=tk.ac;
 drawGlassPanel(-cardW/2,-cardH/2,cardW,cardH,14,isCur?acA(tac,0.4):'rgba(255,255,255,0.08)');
 
 const skyG=cx.createLinearGradient(0,-cardH/2,0,-cardH/2+cardH*.3);
-skyG.addColorStop(0,'#020008');skyG.addColorStop(0.5,`rgba(${tac[0]*.15},${tac[1]*.1},${tac[2]*.15},0.4)`);skyG.addColorStop(1,'rgba(0,0,0,0)');
+skyG.addColorStop(0,'#0a1628');skyG.addColorStop(0.5,`rgba(${tac[0]*.2},${tac[1]*.15},${tac[2]*.2},0.5)`);skyG.addColorStop(1,'rgba(0,0,0,0)');
 cx.fillStyle=skyG;cx.fillRect(-cardW/2+2,-cardH/2+2,cardW-4,cardH*.3);
 
 cx.font=`bold ${Math.max(13,cardW*.065)}px 'Microsoft YaHei','PingFang SC',sans-serif`;
@@ -1108,7 +1127,7 @@ cx.restore();
 
 function drawSettings(){
 const c=ac();
-cx.fillStyle='rgba(5,0,12,0.7)';cx.fillRect(0,0,W,H);
+cx.fillStyle='rgba(8,10,25,0.6)';cx.fillRect(0,0,W,H);
 cx.save();cx.textAlign='center';cx.textBaseline='middle';
 const tf=Math.max(18,Math.min(W*.04,H*.04));
 cx.font=`bold ${tf}px 'Microsoft YaHei','PingFang SC',sans-serif`;
@@ -1132,7 +1151,7 @@ cx.restore();
 
 function drawGameOver(){
 const c=ac();
-cx.fillStyle='rgba(5,0,12,0.65)';cx.fillRect(0,0,W,H);
+cx.fillStyle='rgba(8,10,25,0.6)';cx.fillRect(0,0,W,H);
 cx.save();cx.textAlign='center';cx.textBaseline='middle';
 
 const tf=Math.max(20,Math.min(W*.05,H*.045));
@@ -1186,7 +1205,7 @@ cx.restore();
 
 function drawLevelComplete(){
 const c=ac();
-cx.fillStyle='rgba(5,0,12,0.6)';cx.fillRect(0,0,W,H);
+cx.fillStyle='rgba(8,10,25,0.55)';cx.fillRect(0,0,W,H);
 cx.save();cx.textAlign='center';cx.textBaseline='middle';
 
 const tf=Math.max(20,Math.min(W*.05,H*.045));
@@ -1282,6 +1301,7 @@ const shake=shakeAmt+(nitroActive?.02:0);
 cx.translate((Math.random()-.5)*shake*22,(Math.random()-.5)*shake*16);
 }
 cx.clearRect(-30,-30,W+60,H+60);
+cx.imageSmoothingEnabled=false;
 
 drawSky();drawStars();drawNeonOrb();
 drawCityLayer(scroll*.05,farBld,FAR_BLD_SPAN,roadY-H*.02,1,.7);
