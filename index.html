@@ -42,10 +42,10 @@ const cv=document.getElementById('c'),cx=cv.getContext('2d');
 let W,H,roadY,DPR=1;
 
 const TRACKS=[
-{name:'黄金海岸',sub:'温暖的起点',target:2000,stars:[3000,6000,10000],diff:1},
-{name:'棕榈大道',sub:'加速前进',target:2500,stars:[4000,8000,14000],diff:1.2},
-{name:'山间高速',sub:'蜿蜒挑战',target:3000,stars:[5500,11000,18000],diff:1.4},
-{name:'夕阳之路',sub:'终极试炼',target:3500,stars:[7000,14000,22000],diff:1.7}
+{name:'黄金海岸',sub:'温暖的起点',target:2000,stars:[3000,6000,10000],diff:0.5},
+{name:'棕榈大道',sub:'加速前进',target:2500,stars:[4000,8000,14000],diff:0.7},
+{name:'山间高速',sub:'蜿蜒挑战',target:3000,stars:[5500,11000,18000],diff:0.9},
+{name:'夕阳之路',sub:'终极试炼',target:3500,stars:[7000,14000,22000],diff:1.1}
 ];
 
 let state='menu',mode='freerun',curTrack=0;
@@ -528,10 +528,10 @@ const types=['rock','cone','barrier'];
 const tp=types[Math.floor(Math.random()*types.length)],d=OD[tp];
 const lane=Math.floor(Math.random()*LANE_COUNT);
 const y=lanes[lane];
-obstacles.push({x:W+600,y,type:tp,w:d.w*sc,h:d.h*sc,nearMissed:false});
-if(gameTime>20&&Math.random()<Math.min(.22,(gameTime-20)*.003*diff)){
+obstacles.push({x:W+900,y,type:tp,w:d.w*sc,h:d.h*sc,nearMissed:false});
+if(gameTime>60&&Math.random()<Math.min(.12,(gameTime-60)*.001*diff)){
 let lane2=lane;while(lane2===lane)lane2=Math.floor(Math.random()*LANE_COUNT);
-obstacles.push({x:W+600+Math.random()*100,y:lanes[lane2],type:tp,w:d.w*sc,h:d.h*sc,nearMissed:false});
+obstacles.push({x:W+900+Math.random()*150,y:lanes[lane2],type:tp,w:d.w*sc,h:d.h*sc,nearMissed:false});
 }}
 
 function spawnCoin(){
@@ -633,8 +633,8 @@ return;
 }
 const diff=TRACKS[curTrack].diff||1;
 gameTime+=dt;surviveTime+=dt;
-speedMul=1+gameTime*.008*diff;
-if(speedMul>3.8)speedMul=3.8;
+speedMul=1+gameTime*.005*diff;
+if(speedMul>3.2)speedMul=3.2;
 
 let effSpd=spd;
 if(speedPenalty>0){speedPenalty-=dt;effSpd*=0.45}
@@ -674,7 +674,8 @@ if(activePU.jet>0){isJumping=true;jumpHeight+=(120-jumpHeight)*Math.min(1,6*dt);
 else if(isJumping){jumpVel-=JUMP_GRAVITY*dt;jumpHeight+=jumpVel*dt;if(jumpHeight<=0){jumpHeight=0;jumpVel=0;isJumping=false;playLandSound()}}
 
 obsTimer+=dt;
-const oi=Math.max(.45,1.6-gameTime*.01*diff);
+const graceTime=8;
+const oi=gameTime<graceTime?999:Math.max(1.3,2.8-gameTime*.004*diff);
 if(obsTimer>=oi){obsTimer=0;spawnObs()}
 
 coinTimer+=dt;
