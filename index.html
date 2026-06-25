@@ -56,6 +56,10 @@ const LANE_COUNT=4;
 let lanes=[],currentLane=1,laneSwitchCooldown=0,laneWidth=0,roadLaneTop=0;
 let raceTotal=6,racePosition=6,prevPosition=6,posChangeFx=0,posChangeDir=0;
 let speedPenalty=0;
+let countdownTimer=0;
+let raceNPCs=[];
+let finishAnimTimer=0,finishTriggered=false;
+const RACE_DIST=5000;
 
 const OD={rock:{w:42,h:36},cone:{w:28,h:48},barrier:{w:85,h:40}};
 const AI_COLORS=['#c43030','#2a7a40','#3060a0','#8a5020','#6a3080','#a06030','#2080a0','#904050'];
@@ -230,10 +234,25 @@ gear=1;displaySpd=0;
 aiCars=[];aiTimer=0;obsTimer=0;coinTimer=0;nitroPickTimer=0;
 overtakeFx=[];speedLines=[];fireTrail=[];
 shakeAmt=0;flashA=0;
+raceTotal=6;
 racePosition=raceTotal;prevPosition=raceTotal;posChangeFx=0;
+raceNPCs=[];finishTriggered=false;finishAnimTimer=0;
 updateTouchVis();
 }
-function startTournament(idx){curTrack=idx;mode='tournament';startGame()}
+function startTournament(idx){
+curTrack=idx;mode='tournament';startGame();
+state='countdown';countdownTimer=4;
+raceTotal=4;racePosition=4;prevPosition=4;
+const npcLanes=[0,2,3],npcColors=['#c43030','#2a7a40','#3060a0'];
+const diff=TRACKS[curTrack].diff||1;
+raceNPCs=[];
+for(let i=0;i<3;i++){
+raceNPCs.push({lane:npcLanes[i],y:lanes[npcLanes[i]],color:npcColors[i],style:i,
+raceDistance:0,speedFactor:0.82+Math.random()*0.25+diff*0.06,
+currentSpeed:0,spdTimer:3+Math.random()*4,accelRate:1.2+Math.random()*1.5});
+}
+aiCars=[];
+}
 
 function activateNitro(){
 if(nitro>=100&&!nitroActive){
@@ -332,6 +351,15 @@ if(pts)overtakeFx.push({x:x+20,y:y-25,life:1,text:`+${pts}`,score:0,big:false});
 }
 
 function updateGame(dt,spd){
+if(mode==='tournament'&&finishTriggered){
+finishAnimTimer-=dt;gameTime+=dt;
+speedMul*=Math.pow(0.08,dt);if(speedMul<0.02)speedMul=0.02;
+distance+=spd*dt*0.1;
+const curSpd=spd*.3;displaySpd+=(curSpd-displaySpd)*Math.min(1,8*dt);
+for(const npc of raceNPCs){npc.currentSpeed*=Math.pow(0.08,dt);npc.raceDistance+=npc.currentSpeed*dt*0.1}
+if(finishAnimTimer<=0)completeLevel();
+return;
+}
 const diff=TRACKS[curTrack].diff||1;
 gameTime+=dt;surviveTime+=dt;
 speedMul=1+gameTime*.008*diff;
@@ -360,7 +388,7 @@ gear=displaySpd<120?1:displaySpd<200?2:displaySpd<300?3:displaySpd<420?4:display
 
 score+=dt*100*speedMul*(nitroActive?1.5:1);
 distance+=effSpd*dt*.1;
-if(mode==='tournament'&&distance>=TRACKS[curTrack].target){completeLevel();return}
+if(mode==='tournament'&&!finishTriggered&&distance>=RACE_DIST){finishTriggered=true;finishAnimTimer=2.5;shakeAmt=.5;flashA=.4;flashC='255,220,100'}
 
 if(laneSwitchCooldown>0)laneSwitchCooldown-=dt;
 if(holdUp&&laneSwitchCooldown<=0&&currentLane>0){currentLane--;laneSwitchCooldown=0.16}
@@ -378,9 +406,9 @@ if(coinTimer>=.9+Math.random()*.6){coinTimer=0;spawnCoin()}
 nitroPickTimer+=dt;
 if(nitroPickTimer>=4+Math.random()*3){nitroPickTimer=0;spawnNitroPickup()}
 
-aiTimer+=dt;
+if(mode!=='tournament'){aiTimer+=dt;
 const aiInterval=Math.max(1.8,4-gameTime*.02);
-if(aiTimer>=aiInterval&&aiCars.length<6){aiTimer=0;spawnAiCar()}
+if(aiTimer>=aiInterval&&aiCars.length<6){aiTimer=0;spawnAiCar()}}
 
 for(let i=obstacles.length-1;i>=0;i--){obstacles[i].x-=effSpd*dt;if(obstacles[i].x<-200)obstacles.splice(i,1)}
 for(let i=coins.length-1;i>=0;i--){coins[i].x-=effSpd*dt;if(coins[i].x<-60)coins.splice(i,1)}
@@ -424,6 +452,22 @@ prevPosition=racePosition;
 spawnOvertakeFx(a.x,a.y,'被超越',0);
 }}
 if(posChangeFx>0)posChangeFx-=dt;
+if(mode==='tournament'&&raceNPCs.length>0){
+const raceSpd=baseSpd*speedMul;
+for(const npc of raceNPCs){
+const tgtSpd=raceSpd*npc.speedFactor;
+npc.currentSpeed+=(tgtSpd-npc.currentSpeed)*Math.min(1,npc.accelRate*dt);
+npc.spdTimer-=dt;
+if(npc.spdTimer<=0){npc.spdTimer=2+Math.random()*3;npc.speedFactor+=(Math.random()-.5)*.12;npc.speedFactor=clamp(npc.speedFactor,0.78,1.18)}
+if(Math.random()<0.002){const dir=Math.random()<0.5?-1:1;npc.lane=clamp(npc.lane+dir,0,LANE_COUNT-1)}
+npc.y+=(lanes[npc.lane]-npc.y)*Math.min(1,8*dt);
+npc.raceDistance+=npc.currentSpeed*dt*0.1;
+}
+let pos=1;for(const npc of raceNPCs){if(npc.raceDistance>distance)pos++}
+if(pos!==racePosition){
+if(pos<racePosition){posChangeFx=1.5;posChangeDir=-1}else{posChangeFx=1.5;posChangeDir=1}
+racePosition=pos;prevPosition=pos;
+}}
 
 const sc=Math.min(W,H)/850;
 const carCY=pY-25*sc;
@@ -804,7 +848,7 @@ function drawAiCars(){for(const a of aiCars)drawAiCar(a)}
 
 function drawFinishLine(){
 if(mode!=='tournament')return;
-const target=TRACKS[curTrack].target;
+const target=RACE_DIST;
 if(distance<target-200)return;
 const prog=(distance-(target-200))/200;
 const fx=W*(1-prog*0.7);
@@ -1059,15 +1103,23 @@ cx.fillText('减速中...',W/2,nbY+nbH+Math.max(22,fs*1.5));
 }
 
 if(mode==='tournament'){
-const target=TRACKS[curTrack].target;
+const target=RACE_DIST;
 const prog=Math.min(1,distance/target);
-const pbW=Math.min(160,W*.35),pbH=5;
-const pbX=W/2-pbW/2,pbY=nbY+nbH+Math.max(16,fs*.75);
-drawGlassPanel(pbX-2,pbY-2,pbW+4,pbH+4,4,'rgba(230,180,80,0.08)');
-cx.fillStyle='rgba(255,200,80,0.6)';cx.fillRect(pbX,pbY,pbW*prog,pbH);
-cx.font=`${Math.max(8,fs*.38)}px sans-serif`;
-cx.fillStyle='rgba(255,240,200,0.35)';
-cx.fillText(`${Math.floor(distance)}m / ${target}m`,W/2,pbY+pbH+Math.max(8,fs*.38));
+const remain=Math.max(0,target-Math.floor(distance));
+const pbW=Math.min(W-pad*6,W*.6),pbH=7;
+const pbX=W/2-pbW/2,pbY=nbY+nbH+Math.max(16,fs*.8);
+drawGlassPanel(pbX-3,pbY-3,pbW+6,pbH+6,5,'rgba(230,180,80,0.1)');
+const pg=cx.createLinearGradient(pbX,0,pbX+pbW*prog,0);
+pg.addColorStop(0,'rgba(255,200,80,0.6)');pg.addColorStop(1,'rgba(255,140,40,0.85)');
+cx.fillStyle=pg;cx.fillRect(pbX,pbY,pbW*prog,pbH);
+for(const npc of raceNPCs){const np=Math.min(1,npc.raceDistance/target);
+cx.fillStyle=npc.color;cx.globalAlpha=0.8;cx.beginPath();cx.arc(pbX+pbW*np,pbY+pbH/2,3.5,0,6.2832);cx.fill();cx.globalAlpha=1}
+cx.fillStyle='#4488cc';cx.beginPath();cx.arc(pbX+pbW*prog,pbY+pbH/2,4.5,0,6.2832);cx.fill();
+cx.strokeStyle='rgba(255,255,255,0.7)';cx.lineWidth=1.2;cx.beginPath();cx.arc(pbX+pbW*prog,pbY+pbH/2,4.5,0,6.2832);cx.stroke();
+const distY=pbY+pbH+Math.max(12,fs*0.5);
+cx.font=`${Math.max(9,fs*.4)}px 'Microsoft YaHei','PingFang SC',sans-serif`;
+cx.textAlign='center';cx.fillStyle='rgba(255,240,200,0.45)';
+cx.fillText(`${Math.floor(distance)}m / ${target}m   剩余 ${remain}m`,W/2,distY);
 }
 cx.restore();
 }
@@ -1299,6 +1351,79 @@ cx.fillText(hasNext?'点击或回车进入下一赛道':'点击或回车返回',
 cx.restore();
 }
 
+function drawRaceNPCs(){
+if(mode!=='tournament'||!raceNPCs.length)return;
+const sc=Math.min(W,H)/850,px=W*0.3;
+const sorted=[...raceNPCs].sort((a,b)=>b.raceDistance-a.raceDistance);
+for(const npc of sorted){
+let sx,ds=1,al=1;
+const ny=state==='countdown'?lanes[npc.lane]:npc.y;
+if(state==='countdown')sx=px;
+else{
+const rd=npc.raceDistance-distance;
+if(rd>0){const n=Math.min(rd/600,1);ds=Math.max(0.15,1-n*.85);sx=lerp(px+60,W*.92,n);if(n>.95)al=0.3}
+else{const n=Math.min(-rd/400,1);
+if(n>.7){cx.save();cx.font=`bold ${Math.max(10,W*.013)}px sans-serif`;cx.textAlign='left';cx.fillStyle=npc.color;cx.globalAlpha=.7;cx.fillText('← '+Math.floor(-rd)+'m',8,ny-10*sc);cx.restore();continue}
+ds=Math.max(0.3,1-n*.5);sx=lerp(px-60,px-W*.22,n)}}
+cx.save();cx.globalAlpha=al;
+if(ds!==1){cx.translate(sx,ny);cx.scale(ds,ds);cx.translate(-sx,-ny)}
+drawAiCar({x:sx,y:ny,smashed:false,entryAlpha:1,color:npc.color,style:npc.style,w:110*sc,h:44*sc});
+cx.restore();
+if(state!=='countdown'){const rd=npc.raceDistance-distance;
+if(Math.abs(rd)>5){cx.save();const lf=Math.max(9,W*.011)*Math.max(ds,.6);
+cx.font=`bold ${lf}px sans-serif`;cx.textAlign='center';
+cx.fillStyle=rd>0?'rgba(255,100,60,.85)':'rgba(100,255,100,.85)';
+cx.fillText((rd>0?'+':'')+Math.floor(rd)+'m',sx,ny-38*sc*ds);cx.restore()}}
+}}
+
+function drawCountdown(){
+if(state!=='countdown')return;
+cx.fillStyle='rgba(0,0,0,0.25)';cx.fillRect(0,0,W,H);
+const sc=Math.min(W,H)/850;
+const lineX=W*0.3+140*sc;
+cx.save();cx.strokeStyle='rgba(255,255,255,0.5)';cx.lineWidth=3;cx.setLineDash([12,12]);
+cx.beginPath();cx.moveTo(lineX,roadY+8);cx.lineTo(lineX,roadLaneTop+laneWidth*LANE_COUNT);cx.stroke();cx.setLineDash([]);cx.restore();
+let text,cr,cg,cb,progress;
+if(countdownTimer>3){text='3';cr=255;cg=255;cb=255;progress=1-(countdownTimer-3)}
+else if(countdownTimer>2){text='2';cr=255;cg=220;cb=68;progress=1-(countdownTimer-2)}
+else if(countdownTimer>1){text='1';cr=255;cg=100;cb=34;progress=1-(countdownTimer-1)}
+else{text='GO!';cr=68;cg=255;cb=68;progress=1-countdownTimer}
+let scale,alpha=1;
+if(progress<0.15)scale=lerp(2.2,1,progress/0.15);
+else if(progress<0.8)scale=1+0.05*Math.sin(progress*12);
+else{const f=(progress-0.8)/0.2;scale=lerp(1,0.7,f);alpha=lerp(1,0,f)}
+if(text==='GO!')scale*=1.3;
+const fs=Math.max(60,Math.min(W,H)*0.18);
+cx.save();cx.textAlign='center';cx.textBaseline='middle';
+cx.translate(W/2,H*0.38);cx.scale(scale,scale);
+cx.font=`bold ${fs}px 'Microsoft YaHei','PingFang SC',sans-serif`;
+cx.fillStyle=`rgba(${cr},${cg},${cb},${alpha})`;
+cx.shadowColor=`rgba(${cr},${cg},${cb},${alpha*0.7})`;cx.shadowBlur=40;
+cx.fillText(text,0,0);cx.shadowBlur=0;cx.restore();
+cx.save();cx.textAlign='center';
+cx.font=`${Math.max(11,W*0.015)}px 'Microsoft YaHei','PingFang SC',sans-serif`;
+cx.fillStyle='rgba(255,240,200,0.4)';
+cx.fillText(TRACKS[curTrack].name+' — '+RACE_DIST+'m',W/2,H*0.55);cx.restore();
+}
+
+function drawFinishAnim(){
+if(!finishTriggered||finishAnimTimer<=0||state!=='play')return;
+const prog=1-finishAnimTimer/2.5;
+const fs=Math.max(40,Math.min(W,H)*0.1);
+cx.save();cx.textAlign='center';cx.textBaseline='middle';
+let scale=prog<0.15?lerp(3,1,prog/0.15):1;
+let alpha=prog>0.7?lerp(1,0.3,(prog-0.7)/0.3):1;
+cx.translate(W/2,H*0.33);cx.scale(scale,scale);cx.globalAlpha=alpha;
+cx.font=`bold ${fs}px 'Microsoft YaHei','PingFang SC',sans-serif`;
+cx.fillStyle='#ffd060';cx.shadowColor='rgba(255,180,50,0.8)';cx.shadowBlur=35;
+cx.fillText('冲线！',0,0);cx.shadowBlur=0;
+if(prog>0.25){const ra=Math.min(1,(prog-0.25)/0.2);cx.globalAlpha=ra*alpha;
+const rf=fs*0.55;cx.font=`bold ${rf}px 'Microsoft YaHei','PingFang SC',sans-serif`;
+const pc=racePosition<=1?'#ffd060':racePosition<=2?'#c0c0c0':racePosition<=3?'#cd7f32':'#e05040';
+cx.fillStyle=pc;cx.fillText('第'+racePosition+'名',0,fs*0.8)}
+cx.restore();
+}
+
 // ====== MAIN LOOP ======
 
 let last=0;
@@ -1309,6 +1434,7 @@ last=ts;t+=dt;
 
 let spd;
 if(state==='play')spd=baseSpd*speedMul;
+else if(state==='countdown')spd=0;
 else if(state==='gameover'||state==='levelcomplete'){speedMul*=Math.pow(.08,dt);if(speedMul<.015)speedMul=.015;spd=baseSpd*speedMul}
 else spd=200*(1+Math.sin(t*.25)*.04);
 
@@ -1322,6 +1448,7 @@ scroll+=effSpd*dt;
 wheelAng-=effSpd*dt*.065;
 
 if(state==='play')updateGame(dt,spd);
+if(state==='countdown'){countdownTimer-=dt;if(countdownTimer<=0){state='play';updateTouchVis()}}
 
 for(let i=cFx.length-1;i>=0;i--){cFx[i].x+=cFx[i].vx*dt;cFx[i].y+=cFx[i].vy*dt;cFx[i].life-=dt*2.5;if(cFx[i].life<=0)cFx.splice(i,1)}
 if(shakeAmt>0){shakeAmt-=dt*1.8;if(shakeAmt<0)shakeAmt=0}
@@ -1351,7 +1478,7 @@ drawRoad();drawRoadMarkings(scroll*1.0);drawGrass(scroll*0.8);drawBushes(scroll*
 
 drawFinishLine();
 drawObstacles();drawCoins();drawNitroPickups();
-drawAiCars();
+drawAiCars();drawRaceNPCs();
 
 const carPx=W*.3;
 const carPy=state==='menu'||state==='select'||state==='settings'?(lanes[1]||pYMin):pY;
@@ -1365,11 +1492,13 @@ drawVignette();drawNitroScreenFx();
 if(flashA>0){cx.fillStyle=`rgba(${flashC},${flashA})`;cx.fillRect(-30,-30,W+60,H+60)}
 cx.restore();
 
+drawFinishAnim();
 drawObstacleWarnings();
 drawHUD();
 if(state==='menu')drawMenu();
 else if(state==='select')drawTrackSelect();
 else if(state==='settings')drawSettings();
+else if(state==='countdown')drawCountdown();
 else if(state==='gameover')drawGameOver();
 else if(state==='levelcomplete')drawLevelComplete();
 
