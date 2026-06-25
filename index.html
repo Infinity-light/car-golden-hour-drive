@@ -275,8 +275,8 @@ let keys={},holdUp=false,holdDown=false;
 addEventListener('keydown',e=>{
 keys[e.code]=true;ensureAudio();
 if(state==='menu'){
-if(e.code==='ArrowUp'||e.code==='KeyW'){menuSel=(menuSel+2)%3}
-if(e.code==='ArrowDown'||e.code==='KeyS'){menuSel=(menuSel+1)%3}
+if(e.code==='ArrowUp'||e.code==='KeyW'){menuSel=(menuSel+1)%2}
+if(e.code==='ArrowDown'||e.code==='KeyS'){menuSel=(menuSel+1)%2}
 if(e.code==='Space'||e.code==='Enter'){e.preventDefault();menuAction(menuSel)}
 return}
 if(state==='select'){
@@ -288,13 +288,6 @@ return}
 if(state==='gameover'||state==='levelcomplete'){
 if(e.code==='Space'||e.code==='Enter'){e.preventDefault();afterEndAction()}
 if(e.code==='Escape')state='menu';
-return}
-if(state==='settings'){
-if(e.code==='Escape'||e.code==='Backspace')state='menu';
-if(e.code==='ArrowUp'||e.code==='ArrowDown'){
-const opts=['auto','on','off'];
-saveData.showTouch=opts[(opts.indexOf(saveData.showTouch)+1)%3];
-writeSave();updateTouchVis()}
 return}
 if(state!=='play')return;
 if(e.code==='ArrowUp'||e.code==='KeyW'){e.preventDefault();holdUp=true}
@@ -339,10 +332,6 @@ else if(tx>W*.7)curTrack=Math.min(TRACKS.length-1,curTrack+1);
 else if(saveData.tracks[curTrack].unlocked)startTournament(curTrack);
 return}
 if(state==='gameover'||state==='levelcomplete'){afterEndAction();return}
-if(state==='settings'){
-const opts=['auto','on','off'];
-saveData.showTouch=opts[(opts.indexOf(saveData.showTouch)+1)%3];
-writeSave();updateTouchVis();return}
 },{passive:false});
 cv.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
 
@@ -352,23 +341,17 @@ if(state==='menu'){
 const my=e.clientY/H;
 if(my>.36&&my<.52)menuAction(0);
 else if(my>.52&&my<.66)menuAction(1);
-else if(my>.66&&my<.80)menuAction(2);
 }else if(state==='select'){
 const mx=e.clientX;
 if(mx<W*.3)curTrack=Math.max(0,curTrack-1);
 else if(mx>W*.7)curTrack=Math.min(TRACKS.length-1,curTrack+1);
 else if(saveData.tracks[curTrack].unlocked)startTournament(curTrack);
 }else if(state==='gameover'||state==='levelcomplete')afterEndAction();
-else if(state==='settings'){
-const opts=['auto','on','off'];
-saveData.showTouch=opts[(opts.indexOf(saveData.showTouch)+1)%3];
-writeSave();updateTouchVis()}
 });
 
 function menuAction(idx){
 if(idx===0){mode='freerun';curTrack=0;startGame()}
 else if(idx===1)state='select';
-else if(idx===2)state='settings';
 }
 function afterEndAction(){
 if(mode==='tournament'&&state==='levelcomplete'){
@@ -1754,9 +1737,9 @@ cx.font=`${sf}px 'Microsoft YaHei','PingFang SC',sans-serif`;
 cx.fillStyle='rgba(255,240,200,0.3)';
 cx.fillText(`最高分: ${saveData.bestFreeRun}`,W/2,H*.30);
 
-const items=['自由竞速','锦 标 赛','设    置'];
+const items=['自由竞速','锦 标 赛'];
 const btnW=Math.min(240,W*.55),btnH=Math.max(40,H*.06);
-for(let i=0;i<3;i++){
+for(let i=0;i<2;i++){
 const by=H*(.42+i*.12);const sel=i===menuSel;
 drawGlassPanel(W/2-btnW/2,by-btnH/2,btnW,btnH,12,sel?'rgba(255,200,80,0.45)':'rgba(255,255,255,0.06)');
 if(sel){cx.fillStyle='rgba(255,200,80,0.04)';roundRect(W/2-btnW/2,by-btnH/2,btnW,btnH,12);cx.fill()}
@@ -1830,33 +1813,6 @@ cx.fillText(`${curTrack+1} / ${TRACKS.length}`,W/2,H*.92);
 cx.restore();
 }
 
-function drawSettings(){
-cx.fillStyle='rgba(10,8,4,0.5)';cx.fillRect(0,0,W,H);
-cx.save();cx.textAlign='center';cx.textBaseline='middle';
-const tf=Math.max(18,Math.min(W*.04,H*.04));
-cx.font=`bold ${tf}px 'Microsoft YaHei','PingFang SC',sans-serif`;
-cx.fillStyle='#ffc850';cx.shadowColor='rgba(255,180,50,0.4)';cx.shadowBlur=15;
-cx.fillText('设置',W/2,H*.25);cx.shadowBlur=0;
-
-const sf=Math.max(13,W*.016);
-const labelMap={auto:'自动',on:'开启',off:'关闭'};
-cx.font=`${sf}px 'Microsoft YaHei','PingFang SC',sans-serif`;
-cx.fillStyle='rgba(255,240,220,0.6)';
-cx.fillText(`触控按钮: ${labelMap[saveData.showTouch]}`,W/2,H*.45);
-cx.font=`${sf*.7}px 'Microsoft YaHei','PingFang SC',sans-serif`;
-cx.fillStyle='rgba(255,240,220,0.3)';
-cx.fillText('按 ↑↓ 或点击切换: 自动 / 开启 / 关闭',W/2,H*.52);
-
-cx.font=`${sf*.75}px 'Microsoft YaHei','PingFang SC',sans-serif`;
-cx.fillStyle='rgba(255,200,100,0.3)';
-
-const modeHint=mode==='freerun'?'自由竞速: 撞障碍物立即结束':'锦标赛: 撞障碍物只减速';
-cx.fillText(modeHint,W/2,H*.62);
-
-cx.fillStyle='rgba(255,150,80,0.35)';
-cx.fillText('ESC 或点击返回',W/2,H*.72);
-cx.restore();
-}
 
 function drawGameOver(){
 cx.fillStyle='rgba(10,8,4,0.55)';cx.fillRect(0,0,W,H);
@@ -2129,7 +2085,7 @@ drawObstacles();drawCoins();drawNitroPickups();
 drawAiCars();drawRaceNPCs();
 
 const carPx=W*.3;
-const carPy=state==='menu'||state==='select'||state==='settings'?(lanes[1]||pYMin):pY;
+const carPy=state==='menu'||state==='select'?(lanes[1]||pYMin):pY;
 const carSc=Math.min(W,H)/850;
 updateDust(dt,carPx,carPy,carSc);
 drawDust();drawFireTrail(dt);
@@ -2147,7 +2103,6 @@ drawHUD();
 if(mode==='freerun'&&(state==='play'||state==='gameover'))drawEnvWelcome();
 if(state==='menu')drawMenu();
 else if(state==='select')drawTrackSelect();
-else if(state==='settings')drawSettings();
 else if(state==='countdown')drawCountdown();
 else if(state==='gameover')drawGameOver();
 else if(state==='levelcomplete')drawLevelComplete();
