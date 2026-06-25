@@ -25,6 +25,8 @@ canvas{display:block}
 .cb.nos{border-color:rgba(255,140,0,0.25);color:rgba(255,140,0,0.8);background:rgba(255,140,0,0.05);font-size:12px;font-weight:800}
 .cb.nos.ready{border-color:rgba(100,255,60,0.7);color:rgba(100,255,60,1);animation:np .7s infinite}
 .cb.nos.active{border-color:rgba(255,140,0,0.8);color:#ff8800;background:rgba(255,100,0,0.18);animation:none}
+.cb.throttle{border-color:rgba(255,80,30,0.4);color:rgba(255,120,40,0.9);background:rgba(255,80,30,0.08);font-size:13px;font-weight:800;width:60px;height:60px}
+.cb.throttle:active,.cb.throttle.pressed{background:rgba(255,80,30,0.25);border-color:rgba(255,80,30,0.7);box-shadow:0 0 20px rgba(255,80,30,0.3)}
 @keyframes np{0%,100%{box-shadow:0 0 8px rgba(100,255,60,0.25)}50%{box-shadow:0 0 22px rgba(100,255,60,0.45)}}
 #btn-mute{position:fixed;top:8px;right:8px;width:36px;height:36px;border-radius:50%;border:1px solid rgba(230,160,60,0.2);background:rgba(20,15,10,0.5);color:rgba(255,240,200,0.7);font-size:16px;display:flex;align-items:center;justify-content:center;z-index:20;cursor:pointer;-webkit-tap-highlight-color:transparent;pointer-events:auto}
 #btn-mute:active{background:rgba(230,160,60,0.15)}
@@ -35,7 +37,7 @@ canvas{display:block}
 <div id="btn-mute" onclick="toggleMute()">🔊</div>
 <div id="ctrl">
 <div class="bg left"><div class="cb" id="btn-up">▲</div><div class="cb" id="btn-down">▼</div></div>
-<div class="bg right"><div class="cb" id="btn-jump" style="font-size:14px;font-weight:800">跳</div><div class="cb nos" id="btn-nos">氮气</div></div>
+<div class="bg right"><div class="cb throttle" id="btn-throttle">油门</div><div class="cb" id="btn-jump" style="font-size:14px;font-weight:800">跳</div><div class="cb nos" id="btn-nos">氮气</div></div>
 </div>
 <script>
 const cv=document.getElementById('c'),cx=cv.getContext('2d');
@@ -50,7 +52,7 @@ const TRACKS=[
 
 let state='menu',mode='freerun',curTrack=0;
 let t=0,scroll=0,wheelAng=0;
-let score=0,gameTime=0,speedMul=1,baseSpd=550;
+let score=0,gameTime=0,speedMul=1,baseSpd=800;
 let shakeAmt=0,flashA=0,flashC='255,200,100';
 let pY=0,pYMin=0,pYMax=0;
 const pMoveSpd=250;
@@ -80,6 +82,8 @@ const RACE_DIST=5000;
 let isJumping=false,jumpVel=0,jumpHeight=0;
 const JUMP_FORCE=520,JUMP_GRAVITY=1200;
 let prevCountdownSec=-1;
+let carHealth=100,throttle=0;
+const THROTTLE_PER_PRESS=0.13,THROTTLE_DECAY=0.35,THROTTLE_MAX=1.0;
 
 const ENVS=[
 {name:'棕榈树公路',end:2000,welcome:'出发！棕榈树公路'},
@@ -364,6 +368,7 @@ sg.gain.setValueAtTime(0.06,now);sg.gain.exponentialRampToValueAtTime(0.001,now+
 sh.connect(sf);sf.connect(sg);sg.connect(out);sh.start(now);sh.stop(now+0.1)}
 
 function doJump(){if(!isJumping&&state==='play'&&activePU.jet<=0){isJumping=true;jumpVel=JUMP_FORCE;playJumpSound()}}
+function pumpThrottle(){if(state==='play'){throttle=Math.min(THROTTLE_MAX,throttle+THROTTLE_PER_PRESS)}}
 
 function toggleMute(){
 soundMuted=!soundMuted;
@@ -450,8 +455,9 @@ if(state!=='play')return;
 if(e.code==='ArrowUp'||e.code==='KeyW'){e.preventDefault();holdUp=true}
 if(e.code==='ArrowDown'||e.code==='KeyS'){e.preventDefault();holdDown=true}
 if(e.code==='KeyN'||e.code==='KeyF'||e.code==='ShiftLeft'||e.code==='ShiftRight'){e.preventDefault();activateNitro()}
-if(e.code==='Space'){e.preventDefault();doJump()}
-if(e.code==='Escape')state='menu';
+if(e.code==='Space'){e.preventDefault();pumpThrottle()}
+if(e.code==='KeyJ'){e.preventDefault();doJump()}
+if(e.code==='Escape'){if(mode==='freerun'&&score>saveData.bestFreeRun){saveData.bestFreeRun=Math.floor(score);writeSave()}stopBGM();stopEngineSound();state='menu'}
 });
 addEventListener('keyup',e=>{
 keys[e.code]=false;
@@ -473,6 +479,8 @@ el.addEventListener('mousedown',onD);el.addEventListener('mouseup',onU);el.addEv
 }
 setupTouchBtn('btn-up','up');setupTouchBtn('btn-down','down');
 setupTouchBtn('btn-nos','nos');
+document.getElementById('btn-throttle').addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();ensureAudio();pumpThrottle()},{passive:false});
+document.getElementById('btn-throttle').addEventListener('mousedown',e=>{e.preventDefault();e.stopPropagation();ensureAudio();pumpThrottle()});
 document.getElementById('btn-jump').addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();if(state==='play')doJump()},{passive:false});
 document.getElementById('btn-jump').addEventListener('mousedown',e=>{e.preventDefault();e.stopPropagation();if(state==='play')doJump()});
 
@@ -524,7 +532,7 @@ state='play';score=0;gameTime=0;speedMul=1;distance=0;
 coinsCollected=0;overtakeCount=0;smashCount=0;maxSpd=0;surviveTime=0;
 currentLane=1;pY=lanes[1]||pYMin;holdUp=false;holdDown=false;laneSwitchCooldown=0;isJumping=false;jumpVel=0;jumpHeight=0;
 obstacles=[];coins=[];cFx=[];nitroPickups=[];powerups=[];smashFx=[];
-nitro=30;nitroActive=false;nitroTimer=0;superNitro=false;speedPenalty=0;
+nitro=30;nitroActive=false;nitroTimer=0;superNitro=false;speedPenalty=0;carHealth=100;throttle=0;
 powerupTimer=0;activePU={speed:0,shield:0,autoNitro:0,jet:0};
 gear=1;displaySpd=0;
 aiCars=[];aiTimer=0;obsTimer=0;coinTimer=0;nitroPickTimer=0;
@@ -699,8 +707,12 @@ const diff=TRACKS[curTrack].diff||1;
 gameTime+=dt;surviveTime+=dt;
 speedMul=1+gameTime*.005*diff;
 if(speedMul>3.2)speedMul=3.2;
+throttle=Math.max(0,throttle-THROTTLE_DECAY*dt);
+carHealth=Math.min(100,carHealth+3*dt);
+const throttleFactor=0.2+0.8*throttle;
+const healthFactor=0.6+0.4*(carHealth/100);
 
-let effSpd=spd;
+let effSpd=spd*throttleFactor*healthFactor;
 if(speedPenalty>0){speedPenalty-=dt;effSpd*=0.45}
 if(nitroActive){
 nitroTimer-=dt;effSpd*=superNitro?3.5:2.5;
@@ -841,10 +853,13 @@ shakeAmt=Math.max(shakeAmt,.25);flashA=.12;flashC=activePU.shield>0?'80,140,255'
 overtakeFx.push({x:o.x,y:oCY-20,life:1,text:activePU.shield>0?`防护！+${pts}`:`粉碎！+${pts}`,score:0,big:false});
 continue;
 }
-if(mode==='freerun'){endGame();return}
-playCrashSound();speedPenalty=1.5;shakeAmt=Math.max(shakeAmt,.35);flashA=.2;flashC='255,80,30';
+const dmg=o.type==='barrier'?25:o.type==='rock'?20:15;
+carHealth=Math.max(0,carHealth-dmg);
+throttle*=0.15;
+nitro=Math.max(0,nitro-15);
+playCrashSound();speedPenalty=1.2;shakeAmt=Math.max(shakeAmt,.35);flashA=.2;flashC='255,80,30';
 obstacles.splice(i,1);
-overtakeFx.push({x:carX,y:carCY-20,life:1,text:'减速！',score:0,big:false});
+overtakeFx.push({x:carX,y:carCY-20,life:1,text:'撞击！',score:0,big:false});
 continue;
 }
 if(!o.nearMissed){
@@ -901,9 +916,11 @@ shakeAmt=Math.max(shakeAmt,.4);flashA=.2;flashC='255,200,80';
 overtakeFx.push({x:W*.5,y:H*.35,life:1.2,text:'撞飞！+500',score:500,big:true});
 continue;
 }
-if(mode==='freerun'){endGame();return}
-playCrashSound();speedPenalty=1.5;shakeAmt=.3;flashA=.2;flashC='255,80,30';
-overtakeFx.push({x:carX,y:carCY-20,life:1,text:'减速！',score:0,big:false});
+carHealth=Math.max(0,carHealth-20);
+throttle*=0.15;
+nitro=Math.max(0,nitro-15);
+playCrashSound();speedPenalty=1.2;shakeAmt=.3;flashA=.2;flashC='255,80,30';
+overtakeFx.push({x:carX,y:carCY-20,life:1,text:'撞击！',score:0,big:false});
 }}
 
 updateTouchVis();
@@ -913,31 +930,32 @@ updateTouchVis();
 
 function drawSky(){
 const g=cx.createLinearGradient(0,0,0,roadY);
-g.addColorStop(0,'#0a1a3a');
-g.addColorStop(0.08,'#0e2848');
-g.addColorStop(0.15,'#183858');
-g.addColorStop(0.24,'#2a4858');
-g.addColorStop(0.34,'#6a5830');
-g.addColorStop(0.44,'#b07828');
-g.addColorStop(0.52,'#d09020');
-g.addColorStop(0.60,'#e8a820');
-g.addColorStop(0.68,'#f0b830');
-g.addColorStop(0.76,'#f8d048');
-g.addColorStop(0.84,'#fce060');
-g.addColorStop(0.92,'#fff4a0');
-g.addColorStop(1,'#fffcd0');
+g.addColorStop(0,'#12081e');
+g.addColorStop(0.08,'#1e0c30');
+g.addColorStop(0.15,'#2a1040');
+g.addColorStop(0.22,'#421848');
+g.addColorStop(0.30,'#5a1e48');
+g.addColorStop(0.38,'#7a2840');
+g.addColorStop(0.45,'#9a3838');
+g.addColorStop(0.52,'#b84830');
+g.addColorStop(0.60,'#d06028');
+g.addColorStop(0.68,'#e07828');
+g.addColorStop(0.76,'#e89830');
+g.addColorStop(0.84,'#f0b040');
+g.addColorStop(0.92,'#f8c850');
+g.addColorStop(1,'#fcd868');
 cx.fillStyle=g;cx.fillRect(0,0,W,roadY+2);
-const band=cx.createLinearGradient(0,roadY*0.45,0,roadY);
-band.addColorStop(0,'rgba(255,160,60,0)');
-band.addColorStop(0.3,'rgba(255,170,70,0.10)');
-band.addColorStop(0.6,'rgba(255,200,100,0.14)');
-band.addColorStop(0.85,'rgba(255,220,140,0.08)');
-band.addColorStop(1,'rgba(255,240,180,0.04)');
-cx.fillStyle=band;cx.fillRect(0,roadY*0.45,W,roadY*0.55+2);
+const band=cx.createLinearGradient(0,roadY*0.35,0,roadY);
+band.addColorStop(0,'rgba(180,60,100,0)');
+band.addColorStop(0.3,'rgba(220,100,80,0.10)');
+band.addColorStop(0.6,'rgba(255,180,100,0.14)');
+band.addColorStop(0.85,'rgba(255,200,120,0.08)');
+band.addColorStop(1,'rgba(255,220,160,0.04)');
+cx.fillStyle=band;cx.fillRect(0,roadY*0.35,W,roadY*0.65+2);
 for(let i=0;i<5;i++){
 const y=roadY*(0.65+i*0.07);
 const a=0.035-i*0.006;
-cx.fillStyle=`rgba(255,200,100,${a})`;
+cx.fillStyle=`rgba(255,180,100,${a})`;
 cx.fillRect(0,y-2,W,4);
 }
 }
@@ -1055,7 +1073,7 @@ const groundY=roadY-2;
 for(const tr of farTrees){
 let sx=((tr.pos-off%FARTREE_SPAN)%FARTREE_SPAN+FARTREE_SPAN)%FARTREE_SPAN-40;
 if(sx<-50||sx>W+50)continue;
-cx.fillStyle='#1a2a18';
+cx.fillStyle='#1a1018';
 if(tr.type==='pine'){
 cx.fillRect(sx-1.5,groundY-tr.h*.25,3,tr.h*.25);
 for(let j=0;j<3;j++){
@@ -1076,7 +1094,7 @@ let sx=((p.pos-off%PALM_SPAN)%PALM_SPAN+PALM_SPAN)%PALM_SPAN-50;
 if(sx<-80||sx>W+80)continue;
 const h=p.h,lean=p.lean,seed=p.seed;
 const topX=sx+lean,topY=groundY-h;
-cx.fillStyle='#12200f';
+cx.fillStyle='#18100a';
 cx.beginPath();
 const bw=4.5,tw=2.5;
 cx.moveTo(sx-bw,groundY);
@@ -1103,12 +1121,12 @@ const cpx1=topX+Math.cos(baseAngle)*frondLen*.4+sway*.5;
 const cpy1=topY+Math.sin(baseAngle)*frondLen*.3-frondLen*.12;
 const endX=topX+Math.cos(baseAngle)*frondLen+sway;
 const endY=topY+Math.sin(baseAngle)*frondLen*.4+frondLen*.2;
-cx.fillStyle='#12200f';
+cx.fillStyle='#18100a';
 cx.beginPath();cx.moveTo(topX,topY);
 cx.quadraticCurveTo(cpx1,cpy1-3,endX,endY);
 cx.quadraticCurveTo(cpx1+2,cpy1+3,topX+1,topY+2);
 cx.closePath();cx.fill();
-cx.strokeStyle='rgba(10,18,8,0.25)';cx.lineWidth=0.4;
+cx.strokeStyle='rgba(18,10,8,0.25)';cx.lineWidth=0.4;
 for(let l=0.25;l<0.85;l+=0.12){
 const lx=lerp(topX,endX,l)+lerp(0,sway,l)*0.5;
 const ly=lerp(topY,endY,l)+(cpy1-topY)*l*(1-l)*2.5;
@@ -1121,7 +1139,7 @@ cx.strokeStyle='rgba(255,200,80,0.05)';cx.lineWidth=1;
 cx.beginPath();cx.moveTo(topX,topY);
 cx.quadraticCurveTo(cpx1+1,cpy1-4,endX+1,endY-1);cx.stroke();
 }
-cx.fillStyle='#12200f';
+cx.fillStyle='#18100a';
 for(let i=0;i<4;i++){
 cx.beginPath();cx.arc(topX+(i-1.5)*3,topY+5+i*1,2.3,0,6.2832);cx.fill();
 }
@@ -1185,7 +1203,7 @@ for(let x=0;x<W;x+=6){
 const sway=Math.sin((x+off*0.25)*0.04+t*2.5)*3;
 const h=6+Math.sin(x*0.27+31)*3;
 const shade=0.8+Math.sin(x*0.1)*0.2;
-cx.strokeStyle=`rgba(${30*shade|0},${45*shade|0},${18*shade|0},0.85)`;
+cx.strokeStyle=`rgba(${45*shade|0},${25*shade|0},${12*shade|0},0.85)`;
 cx.beginPath();cx.moveTo(x,roadY+2);
 cx.quadraticCurveTo(x+sway*.4,roadY+2-h*.5,x+sway,roadY+2-h);cx.stroke();
 }}
@@ -1194,7 +1212,7 @@ function drawBushes(off){
 for(const b of bushes){
 let sx=((b.pos-off%BUSH_SPAN)%BUSH_SPAN+BUSH_SPAN)%BUSH_SPAN-30;
 if(sx<-30||sx>W+30)continue;
-cx.fillStyle='#1a2510';
+cx.fillStyle='#1a1210';
 cx.beginPath();cx.ellipse(sx,roadY+1,b.w,b.h,0,0,6.2832);cx.fill();
 cx.fillStyle='rgba(255,200,80,0.03)';
 cx.beginPath();cx.ellipse(sx+b.w*0.2,roadY+1-b.h*0.3,b.w*0.5,b.h*0.4,0,0,Math.PI);cx.fill();
@@ -1203,15 +1221,15 @@ cx.beginPath();cx.ellipse(sx+b.w*0.2,roadY+1-b.h*0.3,b.w*0.5,b.h*0.4,0,0,Math.PI
 // === FREERUN JOURNEY RENDERING ===
 
 const SKY_PRESETS=[
-{p:0,top:'#0a1a3a',mid:'#2a4848',low:'#a07028',bot:'#f0b840'},
-{p:.12,top:'#0a1838',mid:'#284040',low:'#a87030',bot:'#f0b838'},
-{p:.25,top:'#081630',mid:'#263838',low:'#b06828',bot:'#f0a830'},
-{p:.40,top:'#081428',mid:'#203030',low:'#c06020',bot:'#f09828'},
-{p:.55,top:'#061220',mid:'#182828',low:'#c85818',bot:'#e88820'},
-{p:.70,top:'#040e1a',mid:'#142020',low:'#b04818',bot:'#d07818'},
-{p:.82,top:'#040a15',mid:'#101818',low:'#903818',bot:'#b06018'},
-{p:.92,top:'#030810',mid:'#0c1010',low:'#602818',bot:'#904018'},
-{p:1,top:'#020608',mid:'#080a0a',low:'#301810',bot:'#4a2818'}
+{p:0,top:'#12081e',mid:'#5a1e48',low:'#b84830',bot:'#f0b040'},
+{p:.12,top:'#10071a',mid:'#521a44',low:'#b04428',bot:'#e8a838'},
+{p:.25,top:'#0e0618',mid:'#4a1840',low:'#a84028',bot:'#e09830'},
+{p:.40,top:'#0c0515',mid:'#401438',low:'#a03820',bot:'#d88828'},
+{p:.55,top:'#0a0412',mid:'#381030',low:'#983020',bot:'#c87820'},
+{p:.70,top:'#080310',mid:'#2a0c28',low:'#882818',bot:'#b06818'},
+{p:.82,top:'#06020c',mid:'#200a20',low:'#702018',bot:'#904818'},
+{p:.92,top:'#040208',mid:'#180818',low:'#501810',bot:'#703418'},
+{p:1,top:'#020106',mid:'#100610',low:'#301010',bot:'#482018'}
 ];
 
 function drawDaySky(dp){
@@ -1295,15 +1313,15 @@ cx.fillStyle=mg;cx.fillRect(0,0,W,roadY);
 }
 
 function drawEnvPalm(off){
-drawMountainLayer(off*0.04,7.3,'#2a3040',H*0.18,roadY-H*0.22);
-drawMountainLayer(off*0.08,3.1,'#384830',H*0.14,roadY-H*0.15);
-drawMountainLayer(off*0.12,5.7,'#485838',H*0.10,roadY-H*0.10);
+drawMountainLayer(off*0.04,7.3,'#2a1830',H*0.18,roadY-H*0.22);
+drawMountainLayer(off*0.08,3.1,'#381828',H*0.14,roadY-H*0.15);
+drawMountainLayer(off*0.12,5.7,'#482028',H*0.10,roadY-H*0.10);
 drawHaze(roadY-H*0.28,roadY,0.05);
 const palmGold=cx.createLinearGradient(0,roadY-H*0.2,0,roadY);
 palmGold.addColorStop(0,'rgba(255,180,60,0)');palmGold.addColorStop(0.5,'rgba(255,190,80,0.06)');palmGold.addColorStop(1,'rgba(255,200,100,0.10)');
 cx.fillStyle=palmGold;cx.fillRect(0,roadY-H*0.2,W,H*0.2);
-drawHillLayer(off*0.22,11.7,'#3a4828',H*0.08,roadY-H*0.05);
-drawHillLayer(off*0.32,19.3,'#2a3818',H*0.06,roadY-H*0.01);
+drawHillLayer(off*0.22,11.7,'#3a1820',H*0.08,roadY-H*0.05);
+drawHillLayer(off*0.32,19.3,'#2a1418',H*0.06,roadY-H*0.01);
 drawFarTreeLine(off*0.38);drawRoadPalms(off*0.5);drawPowerPoles(off*0.7);
 drawGrass(off*0.8);drawBushes(off*0.85);
 }
@@ -1385,11 +1403,11 @@ cx.fillStyle=lg;cx.beginPath();cx.moveTo(px+20-35,roadY);cx.lineTo(px+20,roadY-H
 }
 
 function drawEnvCountry(off){
-drawMountainLayer(off*0.03,22,'#5a6838',H*0.12,roadY-H*0.15);
-cx.fillStyle='#4a7028';cx.beginPath();cx.moveTo(-2,roadY+2);
+drawMountainLayer(off*0.03,22,'#4a2828',H*0.12,roadY-H*0.15);
+cx.fillStyle='#3a2018';cx.beginPath();cx.moveTo(-2,roadY+2);
 for(let x=-2;x<=W+2;x+=4){const h=fbm((x+off*0.15)*0.001,4,22)*H*0.12;cx.lineTo(x,roadY-h-H*0.05)}
 cx.lineTo(W+2,roadY+2);cx.closePath();cx.fill();
-cx.fillStyle='#508828';cx.beginPath();cx.moveTo(-2,roadY+2);
+cx.fillStyle='#4a2820';cx.beginPath();cx.moveTo(-2,roadY+2);
 for(let x=-2;x<=W+2;x+=4){const h=fbm((x+off*0.25)*0.0015,4,44)*H*0.08;cx.lineTo(x,roadY-h-H*0.02)}
 cx.lineTo(W+2,roadY+2);cx.closePath();cx.fill();
 const goldG=cx.createLinearGradient(0,roadY-H*0.25,0,roadY);
@@ -1460,17 +1478,17 @@ for(let i=0;i<10;i++){const pos=i*300+hash(i+160)*150;
 let px=((pos-caOff)%CA_SPAN+CA_SPAN)%CA_SPAN-50;
 if(px<-50||px>W+50)continue;
 const ch=28+hash(i+170)*35;
-cx.fillStyle='#1a6020';cx.fillRect(px-3.5,roadY-ch,7,ch);
+cx.fillStyle='#2a3818';cx.fillRect(px-3.5,roadY-ch,7,ch);
 if(hash(i+180)>.4){
 cx.fillRect(px+3,roadY-ch*0.6,12,4.5);cx.fillRect(px+12,roadY-ch*0.6-11,4.5,16);
-cx.fillStyle='#1a6020';cx.beginPath();cx.arc(px+15,roadY-ch*0.6-13,4,0,6.2832);cx.fill();
+cx.fillStyle='#2a3818';cx.beginPath();cx.arc(px+15,roadY-ch*0.6-13,4,0,6.2832);cx.fill();
 }
 if(hash(i+190)>.5){
-cx.fillStyle='#1a6020';
+cx.fillStyle='#2a3818';
 cx.fillRect(px-16,roadY-ch*0.4,12,4.5);cx.fillRect(px-16,roadY-ch*0.4-10,4.5,14);
 cx.beginPath();cx.arc(px-14,roadY-ch*0.4-12,4,0,6.2832);cx.fill();
 }
-cx.fillStyle='#2a8830';cx.beginPath();cx.arc(px,roadY-ch-5,5.5,0,6.2832);cx.fill()}
+cx.fillStyle='#3a4020';cx.beginPath();cx.arc(px,roadY-ch-5,5.5,0,6.2832);cx.fill()}
 for(let w=0;w<3;w++){const wy=roadY-5-w*6;
 const waveA=0.02+0.015*Math.sin(t*1.2+w*1.5);
 cx.save();cx.globalAlpha=waveA;
@@ -1481,10 +1499,10 @@ for(let x=-10;x<=W+10;x+=3)cx.lineTo(x,wy+Math.sin((x*0.01+t*1.8+w*2))*4);cx.str
 function drawEnvCoast(off){
 const oceanY=roadY-H*0.18;
 const og=cx.createLinearGradient(0,oceanY-H*0.25,0,roadY);
-og.addColorStop(0,'#0a2838');og.addColorStop(0.15,'#0e3858');
-og.addColorStop(0.3,'#183860');og.addColorStop(0.5,'#284868');
-og.addColorStop(0.7,'#385868');og.addColorStop(0.85,'#486058');
-og.addColorStop(1,'#586850');
+og.addColorStop(0,'#0a1828');og.addColorStop(0.15,'#1a2040');
+og.addColorStop(0.3,'#2a2848');og.addColorStop(0.5,'#3a3048');
+og.addColorStop(0.7,'#4a3840');og.addColorStop(0.85,'#5a4038');
+og.addColorStop(1,'#6a4830');
 cx.fillStyle=og;cx.fillRect(0,oceanY-H*0.25,W,roadY-oceanY+H*0.27);
 const sunReflX=W*0.6;
 const sunRefl=cx.createRadialGradient(sunReflX,oceanY,0,sunReflX,roadY,W*0.4);
@@ -1534,17 +1552,17 @@ let px=((pos-ptOff)%PT_SPAN+PT_SPAN)%PT_SPAN-80;
 if(px<-100||px>W+100)continue;
 const h=60+hash(i+210)*45,lean=(hash(i+220)-0.4)*25;
 const topX=px+lean,topY=roadY-h;
-cx.strokeStyle='#4a3518';cx.lineWidth=6;
+cx.strokeStyle='#3a2018';cx.lineWidth=6;
 cx.beginPath();cx.moveTo(px,roadY);cx.quadraticCurveTo(px+lean*0.5,roadY-h*0.5,topX,topY);cx.stroke();
 cx.strokeStyle='rgba(255,200,80,0.06)';cx.lineWidth=1.5;
 cx.beginPath();cx.moveTo(px+3,roadY);cx.quadraticCurveTo(px+lean*0.5+3,roadY-h*0.5,topX+2,topY);cx.stroke();
-cx.fillStyle='#145820';
+cx.fillStyle='#1a1810';
 for(let f=0;f<7;f++){const ba=-Math.PI*0.7+(f/6)*Math.PI*1.9,fl=h*0.38,sway=Math.sin(t*1.5+i*2+f)*5;
 cx.beginPath();cx.moveTo(topX,topY);
 cx.quadraticCurveTo(topX+Math.cos(ba)*fl*0.5+sway,topY+Math.sin(ba)*fl*0.3-12,topX+Math.cos(ba)*fl+sway*2,topY+Math.sin(ba)*fl*0.5+fl*0.2);
 cx.quadraticCurveTo(topX+Math.cos(ba)*fl*0.5+sway+2,topY+Math.sin(ba)*fl*0.3-9,topX+1,topY+2);
 cx.closePath();cx.fill()}
-for(let c=0;c<3;c++){cx.fillStyle='#3a7028';cx.beginPath();cx.arc(topX+(c-1)*4,topY+5,3.5,0,6.2832);cx.fill()}}
+for(let c=0;c<3;c++){cx.fillStyle='#3a2818';cx.beginPath();cx.arc(topX+(c-1)*4,topY+5,3.5,0,6.2832);cx.fill()}}
 }
 
 function drawEnvSnow(off){
@@ -1580,7 +1598,7 @@ for(let x=-2;x<=W+2;x+=4){const h=fbm((x+off*0.06)*0.0005,5,77)*H*0.22;
 cx.lineTo(x,roadY-h-H*0.1+h*0.1)}
 for(let x=W+2;x>=-2;x-=4)cx.lineTo(x,roadY-fbm((x+off*0.06)*0.0005,5,77)*H*0.22-H*0.1);
 cx.closePath();cx.fill();
-cx.fillStyle='#3a5830';cx.beginPath();cx.moveTo(-2,roadY+2);
+cx.fillStyle='#3a2028';cx.beginPath();cx.moveTo(-2,roadY+2);
 for(let x=-2;x<=W+2;x+=3){const h=fbm((x+off*0.15)*0.001,4,88)*H*0.08;cx.lineTo(x,roadY-h-H*0.03)}
 cx.lineTo(W+2,roadY+2);cx.closePath();cx.fill();
 cx.fillStyle='rgba(210,215,235,0.2)';cx.beginPath();
@@ -1591,9 +1609,9 @@ for(let i=0;i<18;i++){const pos=i*180+hash(i+230)*100;
 let px=((pos-pnOff)%PN_SPAN+PN_SPAN)%PN_SPAN-60;
 if(px<-60||px>W+60)continue;
 const h=35+hash(i+240)*40;
-cx.fillStyle='#1a3818';cx.fillRect(px-2.5,roadY-h*0.2,5,h*0.2+2);
+cx.fillStyle='#1a1810';cx.fillRect(px-2.5,roadY-h*0.2,5,h*0.2+2);
 for(let j=0;j<5;j++){const ly=roadY-h*0.2-j*h*0.18,lw=h*0.25*(1-j*0.18);
-cx.fillStyle='#1a4818';cx.beginPath();cx.moveTo(px,ly-h*0.2);cx.lineTo(px-lw,ly);cx.lineTo(px+lw,ly);cx.closePath();cx.fill();
+cx.fillStyle='#1a2010';cx.beginPath();cx.moveTo(px,ly-h*0.2);cx.lineTo(px-lw,ly);cx.lineTo(px+lw,ly);cx.closePath();cx.fill();
 cx.fillStyle='rgba(220,225,240,0.5)';cx.beginPath();cx.moveTo(px,ly-h*0.2);cx.lineTo(px+lw*0.4,ly-h*0.05);cx.lineTo(px+lw,ly);cx.closePath();cx.fill();
 cx.fillStyle='rgba(240,242,255,0.15)';cx.beginPath();cx.moveTo(px-lw*0.3,ly-h*0.15);cx.lineTo(px,ly-h*0.2);cx.lineTo(px+lw*0.2,ly-h*0.08);cx.closePath();cx.fill();
 }}
@@ -1603,9 +1621,9 @@ cx.fillStyle=`rgba(215,225,250,${0.3+hash(x*11)*0.5})`;cx.fillRect(x,roadY-1,1.5
 }
 
 function drawEnvCherry(off){
-drawMountainLayer(off*0.04,99,'#4a4038',H*0.08,roadY-H*0.15);
-drawHillLayer(off*0.12,95,'#4a4830',H*0.08,roadY-H*0.10);
-drawHillLayer(off*0.20,111,'#3a3820',H*0.06,roadY-H*0.04);
+drawMountainLayer(off*0.04,99,'#3a2030',H*0.08,roadY-H*0.15);
+drawHillLayer(off*0.12,95,'#3a2028',H*0.08,roadY-H*0.10);
+drawHillLayer(off*0.20,111,'#2a1820',H*0.06,roadY-H*0.04);
 const cherryGold=cx.createLinearGradient(0,roadY-H*0.3,0,roadY);
 cherryGold.addColorStop(0,'rgba(255,180,80,0)');
 cherryGold.addColorStop(0.3,'rgba(255,190,100,0.06)');
@@ -2302,10 +2320,20 @@ cx.font=`bold ${Math.max(8,fs*.4)}px sans-serif`;
 cx.textAlign='center';cx.fillStyle='rgba(255,240,200,0.35)';
 cx.fillText('氮气',W/2,nbY+nbH+Math.max(8,fs*.4));
 
+const hbY=nbY+nbH+Math.max(12,fs*.5);
+drawGlassPanel(nbX-3,hbY-3,nbW+6,nbH+6,6,'rgba(230,80,50,0.08)');
+const healthFrac=carHealth/100;
+const hCol=carHealth>60?`rgba(80,220,80,0.7)`:carHealth>30?`rgba(220,180,40,0.7)`:`rgba(220,50,30,${.6+.2*Math.sin(t*6)})`;
+cx.fillStyle=hCol;
+cx.fillRect(nbX,hbY,nbW*healthFrac,nbH);
+cx.font=`bold ${Math.max(8,fs*.4)}px sans-serif`;
+cx.textAlign='center';cx.fillStyle='rgba(255,240,200,0.35)';
+cx.fillText('耐久',W/2,hbY+nbH+Math.max(8,fs*.4));
+
 if(speedPenalty>0){
 cx.font=`bold ${Math.max(14,fs*1.2)}px 'Microsoft YaHei','PingFang SC',sans-serif`;
 cx.fillStyle=`rgba(255,80,30,${.5+.3*Math.sin(t*8)})`;
-cx.fillText('减速中...',W/2,nbY+nbH+Math.max(22,fs*1.5));
+cx.fillText('减速中...',W/2,hbY+nbH+Math.max(22,fs*1.2));
 }
 
 let puCount=0;
@@ -2392,7 +2420,7 @@ const pulse=.3+.5*Math.sin(t*2.5);
 cx.font=`${Math.max(9,W*.011)}px 'Microsoft YaHei','PingFang SC',sans-serif`;
 cx.fillStyle=`rgba(255,240,200,${pulse*.3})`;
 cx.fillText('↑↓选择  回车/点击确认',W/2,H*.84);
-cx.fillText('上下切换车道 · 空格跳跃 · N/Shift氮气',W/2,H*.89);
+cx.fillText('空格油门 · 上下切换车道 · J跳跃 · N/Shift氮气',W/2,H*.89);
 cx.restore();
 }
 
@@ -2676,6 +2704,9 @@ else spd=200*(1+Math.sin(t*.25)*.04);
 
 let effSpd=spd;
 if(state==='play'){
+const tF=0.2+0.8*throttle;
+const hF=0.6+0.4*(carHealth/100);
+effSpd*=tF*hF;
 if(speedPenalty>0)effSpd*=0.45;
 if(nitroActive)effSpd*=(superNitro?3.5:2.5);
 }
@@ -2704,12 +2735,12 @@ if(mode==='freerun'&&(state==='play'||state==='gameover')){
 drawFreerunScenery(dt);
 }else{
 drawSky();cx.save();cx.globalAlpha=0.15;drawStars();cx.restore();drawSun();drawClouds();drawBirds();
-drawMountainLayer(scroll*0.04,7.3,'#2a3040',H*0.18,roadY-H*0.22);
-drawMountainLayer(scroll*0.08,3.1,'#384830',H*0.14,roadY-H*0.15);
-drawMountainLayer(scroll*0.12,5.7,'#485838',H*0.10,roadY-H*0.10);
+drawMountainLayer(scroll*0.04,7.3,'#2a1830',H*0.18,roadY-H*0.22);
+drawMountainLayer(scroll*0.08,3.1,'#381828',H*0.14,roadY-H*0.15);
+drawMountainLayer(scroll*0.12,5.7,'#482028',H*0.10,roadY-H*0.10);
 drawHaze(roadY-H*0.28,roadY,0.05);
-drawHillLayer(scroll*0.22,11.7,'#3a5830',H*0.08,roadY-H*0.05);
-drawHillLayer(scroll*0.32,19.3,'#2a4820',H*0.06,roadY-H*0.01);
+drawHillLayer(scroll*0.22,11.7,'#3a1820',H*0.08,roadY-H*0.05);
+drawHillLayer(scroll*0.32,19.3,'#2a1418',H*0.06,roadY-H*0.01);
 drawFarTreeLine(scroll*0.38);drawRoadPalms(scroll*0.5);drawPowerPoles(scroll*0.7);
 drawRoad();drawRoadMarkings(scroll*1.0);drawGrass(scroll*0.8);drawBushes(scroll*0.85);
 }
