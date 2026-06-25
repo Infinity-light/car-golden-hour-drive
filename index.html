@@ -94,9 +94,9 @@ function loadSave(){try{const d=JSON.parse(localStorage.getItem('sr_save'));if(d
 function writeSave(){try{localStorage.setItem('sr_save',JSON.stringify(saveData))}catch(e){}}
 loadSave();
 
-let audioCtx=null,soundMuted=false,bgmPlaying=false,bgmTimer=null,bgmThemeIdx=-1;
+let audioCtx=null,soundMuted=false,bgmPlaying=false,bgmAudio=null,bgmThemeIdx=-1;
 let engineOsc=null,engineOsc2=null,engineOsc3=null,engineGain=null,engineFilter=null;
-let masterComp=null,bgmBar=0;
+let masterComp=null;
 function initAudio(){if(audioCtx)return;try{audioCtx=new(window.AudioContext||window.webkitAudioContext)();
 masterComp=audioCtx.createDynamicsCompressor();masterComp.threshold.value=-18;masterComp.knee.value=8;
 masterComp.ratio.value=6;masterComp.attack.value=0.002;masterComp.release.value=0.12;
