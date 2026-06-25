@@ -534,7 +534,7 @@ let avail=['speed','shield'];
 if(distance>1500)avail.push('autoNitro');
 if(distance>3000)avail.push('jet');
 const type=avail[Math.floor(Math.random()*avail.length)];
-powerups.push({x:W+80,y,r:16*sc,type,pulse:Math.random()*6.28,bobPhase:Math.random()*6.28});
+powerups.push({x:W+800,y,r:16*sc,type,pulse:Math.random()*6.28,bobPhase:Math.random()*6.28});
 }
 
 function activatePowerup(type){
@@ -1469,32 +1469,47 @@ cx.restore();
 
 function drawPowerupWarnings(){
 const sc=Math.min(W,H)/850;
+const PU_ICONS={speed:'▶▶',shield:'🛡',autoNitro:'⚡',jet:'🚀'};
 for(const p of powerups){
-if(p.x>W*0.55&&p.x<W+700){
+if(p.x>W*0.45&&p.x<W+900){
 const wy=p.y-12*sc;
-const closeness=clamp((W+600-p.x)/600,0,1);
-const pulse=Math.sin(t*5+p.bobPhase)*.5+.5;
-const alpha=(0.15+pulse*0.5)*Math.min(1,closeness*1.5);
-const wx=Math.min(W-25,p.x);
+const closeness=clamp((W+800-p.x)/800,0,1);
+const pulse=Math.sin(t*8+p.bobPhase)*.5+.5;
+const alpha=(0.3+pulse*0.7)*Math.min(1,closeness*1.8);
+const wx=Math.min(W-35,p.x);
 const rgb=hexRgb(PU_COLORS[p.type]);
 cx.save();
-cx.fillStyle=`rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha*0.1})`;
-cx.beginPath();cx.arc(wx,wy,28*sc,0,6.2832);cx.fill();
-const ts=14*sc*(.8+closeness*.4);
-cx.fillStyle=`rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha*0.8})`;
-cx.beginPath();
-cx.moveTo(wx,wy-ts*.9);cx.lineTo(wx+ts*.78,wy+ts*.45);cx.lineTo(wx+ts*.3,wy+ts*.45);
-cx.lineTo(wx+ts*.3,wy+ts*.9);cx.lineTo(wx-ts*.3,wy+ts*.9);cx.lineTo(wx-ts*.3,wy+ts*.45);
-cx.lineTo(wx-ts*.78,wy+ts*.45);cx.closePath();cx.fill();
+cx.fillStyle=`rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha*0.2})`;
+cx.beginPath();cx.arc(wx,wy,36*sc,0,6.2832);cx.fill();
+cx.fillStyle=`rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha*0.12})`;
+cx.beginPath();cx.arc(wx,wy,50*sc,0,6.2832);cx.fill();
+const ts=18*sc*(.8+closeness*.5);
+const bgG=cx.createRadialGradient(wx,wy,0,wx,wy,ts*1.2);
+bgG.addColorStop(0,`rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha*0.9})`);
+bgG.addColorStop(1,`rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha*0.4})`);
+cx.fillStyle=bgG;
+cx.beginPath();cx.arc(wx,wy,ts*.9,0,6.2832);cx.fill();
+cx.strokeStyle=`rgba(255,255,255,${alpha*0.6})`;cx.lineWidth=2*sc;
+cx.beginPath();cx.arc(wx,wy,ts*.9,0,6.2832);cx.stroke();
 cx.fillStyle=`rgba(255,255,255,${alpha*0.95})`;
-cx.font=`bold ${Math.max(11,ts*0.65)}px sans-serif`;
+cx.font=`bold ${Math.max(13,ts*0.7)}px sans-serif`;
 cx.textAlign='center';cx.textBaseline='middle';
-cx.fillText('★',wx,wy+ts*.1);
+cx.fillText(PU_ICONS[p.type]||'★',wx,wy);
+const label=PU_NAMES[p.type];
+cx.font=`bold ${Math.max(10,12*sc)}px sans-serif`;
+cx.fillStyle=`rgba(255,255,255,${alpha*0.9})`;
+cx.strokeStyle=`rgba(0,0,0,${alpha*0.5})`;cx.lineWidth=3;
+cx.strokeText(label,wx,wy+ts*1.3);
+cx.fillText(label,wx,wy+ts*1.3);
 if(p.x>W){
-cx.strokeStyle=`rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha*0.3})`;
-cx.lineWidth=2;cx.setLineDash([4,4]);
-cx.beginPath();cx.moveTo(wx-ts,wy);cx.lineTo(wx-ts*3,wy);cx.stroke();
-cx.setLineDash([]);}
+const dashAlpha=alpha*0.5;
+cx.strokeStyle=`rgba(${rgb[0]},${rgb[1]},${rgb[2]},${dashAlpha})`;
+cx.lineWidth=2.5;cx.setLineDash([8,5]);
+cx.beginPath();cx.moveTo(wx-ts,wy);cx.lineTo(wx-ts*4,wy);cx.stroke();
+cx.setLineDash([]);
+const arrX=wx-ts*4-6;
+cx.fillStyle=`rgba(${rgb[0]},${rgb[1]},${rgb[2]},${dashAlpha})`;
+cx.beginPath();cx.moveTo(arrX+10,wy-6);cx.lineTo(arrX,wy);cx.lineTo(arrX+10,wy+6);cx.closePath();cx.fill();}
 cx.restore();
 }}}
 
