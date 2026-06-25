@@ -54,7 +54,7 @@ let score=0,gameTime=0,speedMul=1,baseSpd=550;
 let shakeAmt=0,flashA=0,flashC='255,200,100';
 let pY=0,pYMin=0,pYMax=0;
 const pMoveSpd=250;
-let nitro=0,nitroActive=false,nitroTimer=0;
+let nitro=0,nitroActive=false,nitroTimer=0,superNitro=false;
 let gear=1,displaySpd=0;
 let distance=0,coinsCollected=0,overtakeCount=0,smashCount=0,maxSpd=0,surviveTime=0;
 let obstacles=[],obsTimer=0,coins=[],coinTimer=0;
@@ -561,6 +561,14 @@ powerups.push({x:W+800,y,r:16*sc,type,pulse:Math.random()*6.28,bobPhase:Math.ran
 }
 
 function activatePowerup(type){
+if(type==='speed'){
+nitroActive=true;superNitro=true;nitroTimer=6;
+playNitroSound();
+flashA=0.35;flashC='255,140,40';
+shakeAmt=Math.max(shakeAmt,0.4);
+overtakeFx.push({x:W*.5,y:H*.3,life:1.5,text:'超级氮气!',score:0,big:true});
+return;
+}
 activePU[type]=PU_DURATIONS[type];
 playPowerupSound(type);
 const col=PU_COLORS[type];
