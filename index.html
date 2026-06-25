@@ -8,7 +8,7 @@
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;overflow:hidden;background:#1a1510;touch-action:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;font-family:'Microsoft YaHei','PingFang SC','Segoe UI',system-ui,sans-serif}
 canvas{display:block}
-#ctrl{position:fixed;bottom:0;left:0;right:0;display:none;justify-content:space-between;align-items:center;padding:8px 16px calc(env(safe-area-inset-bottom,0px) + 10px);z-index:10;pointer-events:none;background:rgba(50,35,20,0.6);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid rgba(230,160,60,0.18)}
+#ctrl{position:fixed;bottom:0;left:0;right:0;display:none;justify-content:space-between;align-items:flex-end;padding:6px 12px calc(env(safe-area-inset-bottom,0px) + 4px);z-index:10;pointer-events:none}
 #ctrl.show{display:flex}
 .bg{display:flex;gap:8px;pointer-events:auto}
 .bg.left{flex-direction:column;gap:6px}
@@ -18,13 +18,16 @@ canvas{display:block}
 .cb.nos.ready{border-color:rgba(100,255,60,0.7);color:rgba(100,255,60,1);animation:np .7s infinite}
 .cb.nos.active{border-color:rgba(255,140,0,0.8);color:#ff8800;background:rgba(255,100,0,0.18);animation:none}
 @keyframes np{0%,100%{box-shadow:0 0 8px rgba(100,255,60,0.25)}50%{box-shadow:0 0 22px rgba(100,255,60,0.45)}}
+#btn-mute{position:fixed;top:8px;right:8px;width:36px;height:36px;border-radius:50%;border:1px solid rgba(230,160,60,0.2);background:rgba(20,15,10,0.5);color:rgba(255,240,200,0.7);font-size:16px;display:flex;align-items:center;justify-content:center;z-index:20;cursor:pointer;-webkit-tap-highlight-color:transparent;pointer-events:auto}
+#btn-mute:active{background:rgba(230,160,60,0.15)}
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
+<div id="btn-mute" onclick="toggleMute()">🔊</div>
 <div id="ctrl">
 <div class="bg left"><div class="cb" id="btn-up">▲</div><div class="cb" id="btn-down">▼</div></div>
-<div class="bg right"><div class="cb nos" id="btn-nos">氮气</div></div>
+<div class="bg right"><div class="cb" id="btn-jump" style="font-size:14px;font-weight:800">跳</div><div class="cb nos" id="btn-nos">氮气</div></div>
 </div>
 <script>
 const cv=document.getElementById('c'),cx=cv.getContext('2d');
@@ -60,6 +63,9 @@ let countdownTimer=0;
 let raceNPCs=[];
 let finishAnimTimer=0,finishTriggered=false;
 const RACE_DIST=5000;
+let isJumping=false,jumpVel=0,jumpHeight=0;
+const JUMP_FORCE=520,JUMP_GRAVITY=1200;
+let prevCountdownSec=-1;
 
 const ENVS=[
 {name:'棕榈树公路',end:2000,welcome:'出发！棕榈树公路'},
@@ -81,6 +87,133 @@ let saveData={bestFreeRun:0,tracks:TRACKS.map((_,i)=>({unlocked:i===0,best:0,sta
 function loadSave(){try{const d=JSON.parse(localStorage.getItem('sr_save'));if(d&&d.tracks){saveData=d;if(!saveData.showTouch)saveData.showTouch='auto';while(saveData.tracks.length<TRACKS.length)saveData.tracks.push({unlocked:false,best:0,stars:0})}}catch(e){}}
 function writeSave(){try{localStorage.setItem('sr_save',JSON.stringify(saveData))}catch(e){}}
 loadSave();
+
+let audioCtx=null,soundMuted=false,bgmPlaying=false,bgmTimer=null,engineOsc=null,engineOsc2=null,engineGain=null,engineFilter=null;
+function initAudio(){if(audioCtx)return;try{audioCtx=new(window.AudioContext||window.webkitAudioContext)()}catch(e){}}
+function ensureAudio(){if(!audioCtx)initAudio();if(audioCtx&&audioCtx.state==='suspended')audioCtx.resume()}
+
+function startBGM(){
+if(!audioCtx||bgmPlaying||soundMuted)return;bgmPlaying=true;
+const ctx=audioCtx;
+function loop(){
+if(!bgmPlaying||soundMuted)return;
+const now=ctx.currentTime,bpm=128,beat=60/bpm,bar=beat*8;
+const bassNotes=[55,55,73.42,55,82.41,73.42,65.41,55];
+for(let i=0;i<bassNotes.length;i++){
+const o=ctx.createOscillator(),g=ctx.createGain(),f=ctx.createBiquadFilter();
+o.type='sawtooth';o.frequency.value=bassNotes[i];
+f.type='lowpass';f.frequency.value=180;f.Q.value=3;
+g.gain.setValueAtTime(0,now+i*beat);g.gain.linearRampToValueAtTime(0.04,now+i*beat+0.015);
+g.gain.setValueAtTime(0.035,now+(i+0.5)*beat);g.gain.exponentialRampToValueAtTime(0.001,now+(i+0.95)*beat);
+o.connect(f);f.connect(g);g.connect(ctx.destination);o.start(now+i*beat);o.stop(now+(i+1)*beat)}
+for(let i=0;i<16;i++){
+const n=ctx.createBufferSource(),buf=ctx.createBuffer(1,Math.max(1,ctx.sampleRate*0.04|0),ctx.sampleRate),d=buf.getChannelData(0);
+for(let j=0;j<d.length;j++)d[j]=Math.random()*2-1;n.buffer=buf;
+const g=ctx.createGain(),hp=ctx.createBiquadFilter();hp.type='highpass';hp.frequency.value=9000;
+const vol=i%4===0?0.03:i%2===0?0.015:0.008;
+g.gain.setValueAtTime(vol,now+i*beat/2);g.gain.exponentialRampToValueAtTime(0.001,now+i*beat/2+0.03);
+n.connect(hp);hp.connect(g);g.connect(ctx.destination);n.start(now+i*beat/2);n.stop(now+i*beat/2+0.04)}
+if(Math.random()<0.5){const chords=[220,277.18,329.63];
+for(const freq of chords){const o=ctx.createOscillator(),g=ctx.createGain();
+o.type='sine';o.frequency.value=freq;g.gain.setValueAtTime(0,now);g.gain.linearRampToValueAtTime(0.01,now+beat);
+g.gain.setValueAtTime(0.008,now+bar*0.7);g.gain.exponentialRampToValueAtTime(0.001,now+bar*0.95);
+o.connect(g);g.connect(ctx.destination);o.start(now);o.stop(now+bar)}}
+bgmTimer=setTimeout(loop,bar*1000-30)}
+loop()}
+function stopBGM(){bgmPlaying=false;if(bgmTimer){clearTimeout(bgmTimer);bgmTimer=null}}
+
+function startEngine(){
+if(!audioCtx||engineOsc)return;
+engineOsc=audioCtx.createOscillator();engineOsc.type='sawtooth';engineOsc.frequency.value=55;
+engineOsc2=audioCtx.createOscillator();engineOsc2.type='square';engineOsc2.frequency.value=55.5;
+engineGain=audioCtx.createGain();engineGain.gain.value=0;
+engineFilter=audioCtx.createBiquadFilter();engineFilter.type='lowpass';engineFilter.frequency.value=120;engineFilter.Q.value=2;
+engineOsc.connect(engineFilter);engineOsc2.connect(engineFilter);
+engineFilter.connect(engineGain);engineGain.connect(audioCtx.destination);
+engineOsc.start();engineOsc2.start()}
+function updateEngineSound(spd){
+if(!engineOsc||!audioCtx||soundMuted)return;
+const f=45+spd*0.35,now=audioCtx.currentTime;
+engineOsc.frequency.setTargetAtTime(Math.min(f,280),now,0.08);
+engineOsc2.frequency.setTargetAtTime(Math.min(f+0.5,280),now,0.08);
+engineFilter.frequency.setTargetAtTime(80+spd*0.5,now,0.08);
+engineGain.gain.setTargetAtTime(Math.min(0.03,0.008+spd*0.00004),now,0.05)}
+function stopEngineSound(){if(engineGain&&audioCtx)engineGain.gain.setTargetAtTime(0,audioCtx.currentTime,0.15)}
+
+function playCoinSound(){
+if(!audioCtx||soundMuted)return;const ctx=audioCtx,now=ctx.currentTime;
+const o1=ctx.createOscillator(),o2=ctx.createOscillator(),g=ctx.createGain();
+o1.type='sine';o2.type='sine';
+o1.frequency.setValueAtTime(880,now);o1.frequency.exponentialRampToValueAtTime(1320,now+0.06);
+o2.frequency.setValueAtTime(1320,now+0.06);o2.frequency.exponentialRampToValueAtTime(1760,now+0.12);
+g.gain.setValueAtTime(0.1,now);g.gain.setValueAtTime(0.1,now+0.06);g.gain.exponentialRampToValueAtTime(0.001,now+0.25);
+o1.connect(g);o2.connect(g);g.connect(ctx.destination);o1.start(now);o1.stop(now+0.08);o2.start(now+0.06);o2.stop(now+0.25)}
+
+function playCrashSound(){
+if(!audioCtx||soundMuted)return;const ctx=audioCtx,now=ctx.currentTime;
+const o=ctx.createOscillator(),g=ctx.createGain();
+o.type='sine';o.frequency.setValueAtTime(120,now);o.frequency.exponentialRampToValueAtTime(35,now+0.35);
+g.gain.setValueAtTime(0.22,now);g.gain.exponentialRampToValueAtTime(0.001,now+0.4);
+o.connect(g);g.connect(ctx.destination);o.start(now);o.stop(now+0.4);
+const n=ctx.createBufferSource(),buf=ctx.createBuffer(1,Math.max(1,ctx.sampleRate*0.15|0),ctx.sampleRate),d=buf.getChannelData(0);
+for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;n.buffer=buf;
+const ng=ctx.createGain(),lp=ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=400;
+ng.gain.setValueAtTime(0.08,now);ng.gain.exponentialRampToValueAtTime(0.001,now+0.12);
+n.connect(lp);lp.connect(ng);ng.connect(ctx.destination);n.start(now);n.stop(now+0.15)}
+
+function playNitroSound(){
+if(!audioCtx||soundMuted)return;const ctx=audioCtx,now=ctx.currentTime;
+const n=ctx.createBufferSource(),buf=ctx.createBuffer(1,Math.max(1,ctx.sampleRate*0.6|0),ctx.sampleRate),d=buf.getChannelData(0);
+for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;n.buffer=buf;
+const g=ctx.createGain(),bp=ctx.createBiquadFilter();
+bp.type='bandpass';bp.frequency.setValueAtTime(2500,now);bp.frequency.exponentialRampToValueAtTime(600,now+0.5);bp.Q.value=1.5;
+g.gain.setValueAtTime(0.001,now);g.gain.linearRampToValueAtTime(0.1,now+0.08);g.gain.exponentialRampToValueAtTime(0.001,now+0.55);
+n.connect(bp);bp.connect(g);g.connect(ctx.destination);n.start(now);n.stop(now+0.6);
+const o=ctx.createOscillator(),og=ctx.createGain();
+o.type='sine';o.frequency.setValueAtTime(300,now);o.frequency.exponentialRampToValueAtTime(800,now+0.15);o.frequency.exponentialRampToValueAtTime(400,now+0.5);
+og.gain.setValueAtTime(0.05,now);og.gain.exponentialRampToValueAtTime(0.001,now+0.5);
+o.connect(og);og.connect(ctx.destination);o.start(now);o.stop(now+0.5)}
+
+function playCountdownBeep(isGo){
+if(!audioCtx||soundMuted)return;const ctx=audioCtx,now=ctx.currentTime;
+const o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';
+if(isGo){o.frequency.value=880;g.gain.setValueAtTime(0.16,now);g.gain.exponentialRampToValueAtTime(0.001,now+0.7);
+o.connect(g);g.connect(ctx.destination);o.start(now);o.stop(now+0.7)}
+else{o.frequency.value=440;g.gain.setValueAtTime(0.12,now);g.gain.exponentialRampToValueAtTime(0.001,now+0.18);
+o.connect(g);g.connect(ctx.destination);o.start(now);o.stop(now+0.2)}}
+
+function playOvertakeSound(){
+if(!audioCtx||soundMuted)return;const ctx=audioCtx,now=ctx.currentTime;
+const o=ctx.createOscillator(),g=ctx.createGain();o.type='triangle';
+o.frequency.setValueAtTime(440,now);o.frequency.exponentialRampToValueAtTime(880,now+0.07);o.frequency.exponentialRampToValueAtTime(660,now+0.15);
+g.gain.setValueAtTime(0.1,now);g.gain.exponentialRampToValueAtTime(0.001,now+0.18);
+o.connect(g);g.connect(ctx.destination);o.start(now);o.stop(now+0.2)}
+
+function playSmashSound(){
+if(!audioCtx||soundMuted)return;const ctx=audioCtx,now=ctx.currentTime;
+const o=ctx.createOscillator(),g=ctx.createGain();o.type='square';
+o.frequency.setValueAtTime(200,now);o.frequency.exponentialRampToValueAtTime(60,now+0.2);
+g.gain.setValueAtTime(0.12,now);g.gain.exponentialRampToValueAtTime(0.001,now+0.25);
+o.connect(g);g.connect(ctx.destination);o.start(now);o.stop(now+0.25);
+const n=ctx.createBufferSource(),buf=ctx.createBuffer(1,Math.max(1,ctx.sampleRate*0.08|0),ctx.sampleRate),d=buf.getChannelData(0);
+for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;n.buffer=buf;
+const ng=ctx.createGain();ng.gain.setValueAtTime(0.06,now);ng.gain.exponentialRampToValueAtTime(0.001,now+0.08);
+n.connect(ng);ng.connect(ctx.destination);n.start(now);n.stop(now+0.1)}
+
+function playJumpSound(){
+if(!audioCtx||soundMuted)return;const ctx=audioCtx,now=ctx.currentTime;
+const o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';
+o.frequency.setValueAtTime(280,now);o.frequency.exponentialRampToValueAtTime(560,now+0.1);
+g.gain.setValueAtTime(0.07,now);g.gain.exponentialRampToValueAtTime(0.001,now+0.13);
+o.connect(g);g.connect(ctx.destination);o.start(now);o.stop(now+0.15)}
+
+function doJump(){if(!isJumping&&state==='play'){isJumping=true;jumpVel=JUMP_FORCE;playJumpSound()}}
+
+function toggleMute(){
+soundMuted=!soundMuted;
+if(soundMuted){stopBGM();stopEngineSound()}
+else if(state==='play'||state==='countdown'){ensureAudio();startBGM();startEngine()}
+document.getElementById('btn-mute').textContent=soundMuted?'🔇':'🔊'}
 
 function resize(){
 DPR=window.devicePixelRatio||1;
@@ -140,7 +273,7 @@ const POLE_SPACING=380;
 
 let keys={},holdUp=false,holdDown=false;
 addEventListener('keydown',e=>{
-keys[e.code]=true;
+keys[e.code]=true;ensureAudio();
 if(state==='menu'){
 if(e.code==='ArrowUp'||e.code==='KeyW'){menuSel=(menuSel+2)%3}
 if(e.code==='ArrowDown'||e.code==='KeyS'){menuSel=(menuSel+1)%3}
@@ -166,7 +299,8 @@ return}
 if(state!=='play')return;
 if(e.code==='ArrowUp'||e.code==='KeyW'){e.preventDefault();holdUp=true}
 if(e.code==='ArrowDown'||e.code==='KeyS'){e.preventDefault();holdDown=true}
-if(e.code==='KeyN'||e.code==='KeyF'||e.code==='ShiftLeft'||e.code==='ShiftRight'||e.code==='Space'){e.preventDefault();activateNitro()}
+if(e.code==='KeyN'||e.code==='KeyF'||e.code==='ShiftLeft'||e.code==='ShiftRight'){e.preventDefault();activateNitro()}
+if(e.code==='Space'){e.preventDefault();doJump()}
 if(e.code==='Escape')state='menu';
 });
 addEventListener('keyup',e=>{
@@ -189,9 +323,11 @@ el.addEventListener('mousedown',onD);el.addEventListener('mouseup',onU);el.addEv
 }
 setupTouchBtn('btn-up','up');setupTouchBtn('btn-down','down');
 setupTouchBtn('btn-nos','nos');
+document.getElementById('btn-jump').addEventListener('touchstart',e=>{e.preventDefault();e.stopPropagation();if(state==='play')doJump()},{passive:false});
+document.getElementById('btn-jump').addEventListener('mousedown',e=>{e.preventDefault();e.stopPropagation();if(state==='play')doJump()});
 
 cv.addEventListener('touchstart',e=>{
-e.preventDefault();isTouchDevice=true;updateTouchVis();
+e.preventDefault();isTouchDevice=true;ensureAudio();updateTouchVis();
 },{passive:false});
 cv.addEventListener('touchend',e=>{
 e.preventDefault();
@@ -211,6 +347,7 @@ writeSave();updateTouchVis();return}
 cv.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
 
 cv.addEventListener('click',e=>{
+ensureAudio();
 if(state==='menu'){
 const my=e.clientY/H;
 if(my>.36&&my<.52)menuAction(0);
@@ -245,7 +382,7 @@ else state='menu';
 function startGame(){
 state='play';score=0;gameTime=0;speedMul=1;distance=0;
 coinsCollected=0;overtakeCount=0;smashCount=0;maxSpd=0;surviveTime=0;
-currentLane=1;pY=lanes[1]||pYMin;holdUp=false;holdDown=false;laneSwitchCooldown=0;
+currentLane=1;pY=lanes[1]||pYMin;holdUp=false;holdDown=false;laneSwitchCooldown=0;isJumping=false;jumpVel=0;jumpHeight=0;
 obstacles=[];coins=[];cFx=[];nitroPickups=[];smashFx=[];
 nitro=30;nitroActive=false;nitroTimer=0;speedPenalty=0;
 gear=1;displaySpd=0;
@@ -257,10 +394,11 @@ curEnvIdx=0;envWelcomeTimer=2.5;snowPs=[];petalPs=[];dataPs=[];
 racePosition=raceTotal;prevPosition=raceTotal;posChangeFx=0;
 raceNPCs=[];finishTriggered=false;finishAnimTimer=0;
 updateTouchVis();
+ensureAudio();startBGM();startEngine();
 }
 function startTournament(idx){
 curTrack=idx;mode='tournament';startGame();
-state='countdown';countdownTimer=4;
+state='countdown';countdownTimer=4;prevCountdownSec=4;
 raceTotal=4;racePosition=4;prevPosition=4;
 const npcLanes=[0,2,3],npcColors=['#c43030','#2a7a40','#3060a0'];
 const diff=TRACKS[curTrack].diff||1;
@@ -275,19 +413,19 @@ aiCars=[];
 
 function activateNitro(){
 if(nitro>=100&&!nitroActive){
-nitroActive=true;nitroTimer=3.5;
+nitroActive=true;nitroTimer=3.5;playNitroSound();
 shakeAmt=Math.max(shakeAmt,.3);flashA=.15;flashC='255,180,60';
 }}
 
 function endGame(){
-state='gameover';
+state='gameover';playCrashSound();stopBGM();stopEngineSound();
 if(mode==='freerun'&&score>saveData.bestFreeRun){saveData.bestFreeRun=Math.floor(score);writeSave()}
 shakeAmt=.6;flashA=.5;flashC='255,50,30';
 document.getElementById('ctrl').classList.remove('show');
 }
 
 function completeLevel(){
-state='levelcomplete';
+state='levelcomplete';stopBGM();stopEngineSound();
 const td=saveData.tracks[curTrack],sc=Math.floor(score);
 let earned=0;const th=TRACKS[curTrack].stars;
 if(sc>=th[0])earned=1;if(sc>=th[1])earned=2;if(sc>=th[2])earned=3;
@@ -417,6 +555,7 @@ if(holdUp&&laneSwitchCooldown<=0&&currentLane>0){currentLane--;laneSwitchCooldow
 if(holdDown&&laneSwitchCooldown<=0&&currentLane<LANE_COUNT-1){currentLane++;laneSwitchCooldown=0.16}
 const targetLaneY=lanes[currentLane];
 pY+=(targetLaneY-pY)*Math.min(1,16*dt);
+if(isJumping){jumpVel-=JUMP_GRAVITY*dt;jumpHeight+=jumpVel*dt;if(jumpHeight<=0){jumpHeight=0;jumpVel=0;isJumping=false}}
 
 obsTimer+=dt;
 const oi=Math.max(.45,1.6-gameTime*.01*diff);
@@ -462,7 +601,7 @@ a.lane=a.lane>0?a.lane-1:a.lane+1;a.tgtY=lanes[a.lane];a.laneSwitchTimer=3+Math.
 if(!a.smashed&&!a.fromBehind&&a.lane===currentLane&&a.x>carX+80&&a.x<carX+400){
 a.lane=a.lane>0?a.lane-1:a.lane+1;a.tgtY=lanes[a.lane];if(a.laneSwitchTimer)a.laneSwitchTimer=3+Math.random()*3}
 if(!a.fromBehind&&!a.overtaken&&a.x<carX+30){
-a.overtaken=true;overtakeCount++;score+=200;
+a.overtaken=true;overtakeCount++;score+=200;playOvertakeSound();
 racePosition=Math.max(1,racePosition-1);
 if(racePosition<prevPosition){posChangeFx=1.5;posChangeDir=-1}
 prevPosition=racePosition;
@@ -495,7 +634,8 @@ racePosition=pos;prevPosition=pos;
 }}
 
 const sc=Math.min(W,H)/850;
-const carCY=pY-25*sc;
+const jOff=jumpHeight*sc;
+const carCY=pY-25*sc-jOff;
 const chw=65*sc,chh=20*sc;
 
 for(let i=obstacles.length-1;i>=0;i--){
@@ -503,7 +643,7 @@ const o=obstacles[i];
 const oCY=o.y-o.h*.5;
 if(Math.abs(carX-o.x)<chw+o.w*.38&&Math.abs(carCY-oCY)<chh+o.h*.38){
 if(nitroActive){
-spawnSmashFx(o.x,oCY,o.type);
+spawnSmashFx(o.x,oCY,o.type);playSmashSound();
 obstacles.splice(i,1);
 score+=300;smashCount++;
 shakeAmt=Math.max(shakeAmt,.25);flashA=.12;flashC='255,200,80';
@@ -511,7 +651,7 @@ overtakeFx.push({x:o.x,y:oCY-20,life:1,text:'粉碎！+300',score:0,big:false});
 continue;
 }
 if(mode==='freerun'){endGame();return}
-speedPenalty=1.5;shakeAmt=Math.max(shakeAmt,.35);flashA=.2;flashC='255,80,30';
+playCrashSound();speedPenalty=1.5;shakeAmt=Math.max(shakeAmt,.35);flashA=.2;flashC='255,80,30';
 obstacles.splice(i,1);
 overtakeFx.push({x:carX,y:carCY-20,life:1,text:'减速！',score:0,big:false});
 continue;
@@ -527,7 +667,7 @@ overtakeFx.push({x:o.x,y:o.y-40*sc,life:1,text:'惊险！+50',score:0,big:false}
 for(let i=coins.length-1;i>=0;i--){
 const c=coins[i],ccY=c.y-12*sc;
 if(Math.abs(carX-c.x)<chw+c.r*1.5&&Math.abs(carCY-ccY)<chh+c.r*1.5){
-score+=100;coinsCollected++;nitro=Math.min(100,nitro+5);
+score+=100;coinsCollected++;nitro=Math.min(100,nitro+5);playCoinSound();
 spawnCFx(c.x,ccY);coins.splice(i,1);
 }}
 
@@ -543,7 +683,7 @@ for(const a of aiCars){
 if(a.smashed)continue;
 if(Math.abs(carX-a.x)<chw+a.w*.35&&Math.abs(carCY-(a.y-a.h*.3))<chh+a.h*.35){
 if(nitroActive){
-a.smashed=true;
+a.smashed=true;playSmashSound();
 a.smashVx=(a.x>carX?1:-1)*300+100;
 a.smashVy=-250-Math.random()*100;
 a.smashRotSpd=(Math.random()-.5)*10;
@@ -557,7 +697,7 @@ overtakeFx.push({x:W*.5,y:H*.35,life:1.2,text:'撞飞！+500',score:500,big:true
 continue;
 }
 if(mode==='freerun'){endGame();return}
-speedPenalty=1.5;shakeAmt=.3;flashA=.2;flashC='255,80,30';
+playCrashSound();speedPenalty=1.5;shakeAmt=.3;flashA=.2;flashC='255,80,30';
 overtakeFx.push({x:carX,y:carCY-20,life:1,text:'减速！',score:0,big:false});
 }}
 
@@ -1323,16 +1463,20 @@ cx.fillRect(fx+col*sz,roadY+row*sz,sz,sz);
 
 function drawCar(px,py){
 const sc=Math.min(W,H)/850;
+const jOff=(jumpHeight||0)*sc;
 const bounce=Math.sin(t*4.5)*1.8+Math.sin(t*7.3)*.6;
 let tilt=Math.sin(t*3.8)*.002;
 if(state==='play'){
 if(holdUp)tilt-=.008;if(holdDown)tilt+=.008;
 tilt=clamp(tilt,-.04,.04);
 }
-cx.save();cx.translate(px,py+bounce);cx.rotate(tilt);cx.scale(sc,sc);
+if(jOff>0){const shdSc=Math.max(0.4,1-jumpHeight/180);
+cx.save();cx.translate(px,py+bounce);cx.scale(sc,sc);
+cx.fillStyle=`rgba(0,0,0,${0.18*shdSc})`;cx.beginPath();cx.ellipse(5,18-bounce/sc,128*shdSc,9*shdSc,0,0,6.2832);cx.fill();cx.restore()}
+cx.save();cx.translate(px,py+bounce-jOff);cx.rotate(tilt+(jOff>0?-0.06:0));cx.scale(sc,sc);
 if(nitroActive){cx.scale(1.03,1);cx.translate(-4,0)}
 
-cx.fillStyle='rgba(0,0,0,0.22)';cx.beginPath();cx.ellipse(5,18-bounce/sc,128,9,0,0,6.2832);cx.fill();
+if(jOff<=0){cx.fillStyle='rgba(0,0,0,0.22)';cx.beginPath();cx.ellipse(5,18-bounce/sc,128,9,0,0,6.2832);cx.fill()}
 cx.fillStyle='#1c3a58';cx.beginPath();
 cx.moveTo(128,6);cx.lineTo(132,-2);cx.quadraticCurveTo(133,-18,128,-28);cx.lineTo(112,-34);
 cx.lineTo(62,-37);cx.lineTo(38,-72);cx.quadraticCurveTo(5,-80,-25,-76);
@@ -1625,7 +1769,7 @@ const pulse=.3+.5*Math.sin(t*2.5);
 cx.font=`${Math.max(9,W*.011)}px 'Microsoft YaHei','PingFang SC',sans-serif`;
 cx.fillStyle=`rgba(255,240,200,${pulse*.3})`;
 cx.fillText('↑↓选择  回车/点击确认',W/2,H*.84);
-cx.fillText('上下切换车道 · N/Shift氮气加速',W/2,H*.89);
+cx.fillText('上下切换车道 · 空格跳跃 · N/Shift氮气',W/2,H*.89);
 cx.restore();
 }
 
@@ -1950,8 +2094,11 @@ if(nitroActive)effSpd*=2.5;
 scroll+=effSpd*dt;
 wheelAng-=effSpd*dt*.065;
 
-if(state==='play')updateGame(dt,spd);
-if(state==='countdown'){countdownTimer-=dt;if(countdownTimer<=0){state='play';flashA=0.3;flashC='100,255,80';shakeAmt=0.2;updateTouchVis()}}
+if(state==='play'){updateGame(dt,spd);updateEngineSound(displaySpd)}
+if(state==='countdown'){countdownTimer-=dt;
+const cdSec=Math.ceil(countdownTimer);
+if(cdSec!==prevCountdownSec&&cdSec>=0&&cdSec<=3){prevCountdownSec=cdSec;playCountdownBeep(cdSec===0)}
+if(countdownTimer<=0){state='play';flashA=0.3;flashC='100,255,80';shakeAmt=0.2;updateTouchVis()}}
 
 for(let i=cFx.length-1;i>=0;i--){cFx[i].x+=cFx[i].vx*dt;cFx[i].y+=cFx[i].vy*dt;cFx[i].life-=dt*2.5;if(cFx[i].life<=0)cFx.splice(i,1)}
 if(shakeAmt>0){shakeAmt-=dt*1.8;if(shakeAmt<0)shakeAmt=0}
