@@ -389,6 +389,22 @@ const rf=ctx.createBiquadFilter();rf.type='bandpass';rf.frequency.value=600;rf.Q
 const rg=ctx.createGain();rg.gain.setValueAtTime(0.05,now+0.02);rg.gain.exponentialRampToValueAtTime(0.001,now+0.12);
 r.connect(rf);rf.connect(rg);rg.connect(out);r.start(now+0.02);r.stop(now+0.12)}
 
+function playPowerupSound(type){
+if(!audioCtx||soundMuted)return;const ctx=audioCtx,now=ctx.currentTime,out=mOut();
+const freqs={speed:[520,780,1040],shield:[440,660,880],autoNitro:[600,900,1200],jet:[700,1050,1400]};
+const f=freqs[type]||freqs.speed;
+for(let i=0;i<3;i++){const o=ctx.createOscillator(),g=ctx.createGain();
+o.type=i===0?'sine':'triangle';o.frequency.setValueAtTime(f[i],now+i*0.07);
+o.frequency.exponentialRampToValueAtTime(f[i]*1.5,now+i*0.07+0.1);
+g.gain.setValueAtTime(0.001,now+i*0.07);g.gain.linearRampToValueAtTime(0.12-i*0.02,now+i*0.07+0.03);
+g.gain.exponentialRampToValueAtTime(0.001,now+i*0.07+0.18);
+o.connect(g);g.connect(out);o.start(now+i*0.07);o.stop(now+i*0.07+0.2)}
+const sh=ctx.createBufferSource(),sb=ctx.createBuffer(1,Math.max(1,ctx.sampleRate*0.08|0),ctx.sampleRate),sd=sb.getChannelData(0);
+for(let i=0;i<sd.length;i++)sd[i]=Math.random()*2-1;sh.buffer=sb;
+const sg=ctx.createGain(),sf=ctx.createBiquadFilter();sf.type='highpass';sf.frequency.value=6000;
+sg.gain.setValueAtTime(0.06,now);sg.gain.exponentialRampToValueAtTime(0.001,now+0.08);
+sh.connect(sf);sf.connect(sg);sg.connect(out);sh.start(now);sh.stop(now+0.1)}
+
 function doJump(){if(!isJumping&&state==='play'&&activePU.jet<=0){isJumping=true;jumpVel=JUMP_FORCE;playJumpSound()}}
 
 function toggleMute(){
@@ -1572,6 +1588,37 @@ cx.setLineDash([]);}
 cx.restore();
 }}}
 
+function drawPowerupWarnings(){
+const sc=Math.min(W,H)/850;
+for(const p of powerups){
+if(p.x>W*0.55&&p.x<W+700){
+const wy=p.y-12*sc;
+const closeness=clamp((W+600-p.x)/600,0,1);
+const pulse=Math.sin(t*5+p.bobPhase)*.5+.5;
+const alpha=(0.15+pulse*0.5)*Math.min(1,closeness*1.5);
+const wx=Math.min(W-25,p.x);
+const rgb=hexRgb(PU_COLORS[p.type]);
+cx.save();
+cx.fillStyle=`rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha*0.1})`;
+cx.beginPath();cx.arc(wx,wy,28*sc,0,6.2832);cx.fill();
+const ts=14*sc*(.8+closeness*.4);
+cx.fillStyle=`rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha*0.8})`;
+cx.beginPath();
+cx.moveTo(wx,wy-ts*.9);cx.lineTo(wx+ts*.78,wy+ts*.45);cx.lineTo(wx+ts*.3,wy+ts*.45);
+cx.lineTo(wx+ts*.3,wy+ts*.9);cx.lineTo(wx-ts*.3,wy+ts*.9);cx.lineTo(wx-ts*.3,wy+ts*.45);
+cx.lineTo(wx-ts*.78,wy+ts*.45);cx.closePath();cx.fill();
+cx.fillStyle=`rgba(255,255,255,${alpha*0.95})`;
+cx.font=`bold ${Math.max(11,ts*0.65)}px sans-serif`;
+cx.textAlign='center';cx.textBaseline='middle';
+cx.fillText('★',wx,wy+ts*.1);
+if(p.x>W){
+cx.strokeStyle=`rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha*0.3})`;
+cx.lineWidth=2;cx.setLineDash([4,4]);
+cx.beginPath();cx.moveTo(wx-ts,wy);cx.lineTo(wx-ts*3,wy);cx.stroke();
+cx.setLineDash([]);}
+cx.restore();
+}}}
+
 function drawCoins(){
 const sc=Math.min(W,H)/850,r=11*sc;
 for(const cn of coins){
@@ -2449,6 +2496,7 @@ cx.restore();
 
 drawFinishAnim();
 drawObstacleWarnings();
+drawPowerupWarnings();
 drawHUD();
 if(mode==='freerun'&&(state==='play'||state==='gameover'))drawEnvWelcome();
 if(state==='menu')drawMenu();
