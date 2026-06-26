@@ -95,6 +95,7 @@ let curEnvIdx=0,envWelcomeTimer=0;
 let snowPs=[],petalPs=[],dataPs=[];
 let bhActive=false,bhTimer=0,bhParticles=[],bhSettlement=false;
 const bhApproachTime=12;
+let imagSpaceTimer=0,imagSpaceEntered=false;
 
 const OD={rock:{w:70,h:60},cone:{w:45,h:75},barrier:{w:140,h:65}};
 const AI_COLORS=['#c43030','#2a7a40','#3060a0','#8a5020','#6a3080','#a06030','#2080a0','#904050'];
@@ -182,15 +183,14 @@ const BGM_FILES=[
 const BGM_VOL=0.55,BGM_FADE_MS=2500;
 function bgmTrack(i){return (i||0)>=7?1:0}
 
-function onBGMEnded(){if(curEnvIdx===7&&state==='play'&&!bhActive){bhActive=true;bhTimer=0;bhParticles=[]}}
+function onBGMEnded(){}
 function startBGM(themeIdx){
 if(bgmPlaying||soundMuted)return;
 bgmThemeIdx=themeIdx!==undefined?themeIdx:0;
-const isVirtual=bgmThemeIdx>=7;
-if(!bgmAudioA){bgmAudioA=new Audio();bgmAudioA.loop=!isVirtual;bgmAudioA.addEventListener('ended',onBGMEnded)}
-else{bgmAudioA.loop=!isVirtual}
-if(!bgmAudioB){bgmAudioB=new Audio();bgmAudioB.loop=!isVirtual;bgmAudioB.addEventListener('ended',onBGMEnded)}
-else{bgmAudioB.loop=!isVirtual}
+if(!bgmAudioA){bgmAudioA=new Audio();bgmAudioA.loop=true}
+else{bgmAudioA.loop=true}
+if(!bgmAudioB){bgmAudioB=new Audio();bgmAudioB.loop=true}
+else{bgmAudioB.loop=true}
 var cur=bgmActiveSlot==='a'?bgmAudioA:bgmAudioB;
 cur.volume=BGM_VOL;cur.src=BGM_FILES[bgmTrack(bgmThemeIdx)]||BGM_FILES[0];
 cur.play().catch(function(){});bgmPlaying=true}
@@ -204,8 +204,7 @@ if(nt===ot||!bgmPlaying||soundMuted)return;
 var outA=bgmActiveSlot==='a'?bgmAudioA:bgmAudioB;
 bgmActiveSlot=bgmActiveSlot==='a'?'b':'a';
 var inA=bgmActiveSlot==='a'?bgmAudioA:bgmAudioB;
-const isVirtual=newIdx>=7;
-inA.src=BGM_FILES[nt]||BGM_FILES[0];inA.loop=!isVirtual;inA.volume=0;
+inA.src=BGM_FILES[nt]||BGM_FILES[0];inA.loop=true;inA.volume=0;
 inA.play().catch(function(){});
 if(bgmFadeTimer)clearInterval(bgmFadeTimer);
 var step=30,total=BGM_FADE_MS/step,tick=0;
@@ -537,7 +536,7 @@ overtakeFx=[];speedLines=[];fireTrail=[];
 shakeAmt=0;flashA=0;
 raceTotal=6;
 curEnvIdx=0;envWelcomeTimer=2.5;snowPs=[];petalPs=[];dataPs=[];
-bhActive=false;bhTimer=0;bhParticles=[];bhSettlement=false;
+bhActive=false;bhTimer=0;bhParticles=[];bhSettlement=false;imagSpaceTimer=0;imagSpaceEntered=false;
 racePosition=raceTotal;prevPosition=raceTotal;posChangeFx=0;
 raceCars=[];playerCar=null;nextFinishOrder=0;finishTriggered=false;finishAnimTimer=0;
 updateTouchVis();
@@ -744,8 +743,9 @@ gear=displaySpd<120?1:displaySpd<200?2:displaySpd<300?3:displaySpd<420?4:display
 
 score+=dt*100*speedMul*(nitroActive?1.5:1);
 distance+=effSpd*dt*.1;
-if(mode==='freerun'){const ni=getEnvIdx(distance);if(ni!==curEnvIdx){curEnvIdx=ni;envWelcomeTimer=3;snowPs=[];petalPs=[];dataPs=[];switchBGMTheme(ni)}}
+if(mode==='freerun'){const ni=getEnvIdx(distance);if(ni!==curEnvIdx){curEnvIdx=ni;envWelcomeTimer=3;snowPs=[];petalPs=[];dataPs=[];switchBGMTheme(ni);if(ni===7){imagSpaceEntered=true;imagSpaceTimer=0}}}
 if(envWelcomeTimer>0)envWelcomeTimer-=dt;
+if(imagSpaceEntered&&!bhActive){imagSpaceTimer+=dt;if(imagSpaceTimer>=120){bhActive=true;bhTimer=0;bhParticles=[]}}
 if(bhActive&&!bhSettlement){bhTimer+=dt;
 if(bhTimer>=bhApproachTime){bhSettlement=true;flashA=1.0;flashC='200,150,255';shakeAmt=1.5;
 setTimeout(function(){if(state==='play'){state='gameover';stopBGM();stopEngineSound()}},1500)}}
