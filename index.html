@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <!--
-  BGM Credits / 背景音乐来源 (Pixabay Content License — free for commercial use, no attribution required):
-  1. dreamwave-ambient.mp3   — "Retrowave ✦ Ambient ✦ Dreamwave ✦ Relaxing Music" by SlicedCorpse via Pixabay
-  2. nostalgic-synthwave.mp3  — "Nostalgic Synthwave" by OctoSound via Pixabay
-  3. retrowave-dream.mp3      — "Retrowave Dream" by NveravetyanMusic via Pixabay
-  4. lofi-synthwave.mp3       — "Lo-Fi Synthwave" by Abydos Music via Pixabay
+  BGM Credits / 背景音乐来源:
+  1. home-resonance.mp3              — "Resonance" by HOME
+  2. kavinsky-nightcall.mp3          — "Nightcall" by Kavinsky
+  3. perturbator-electric-dreams.mp3 — "Electric Dreams" by Perturbator
+  4. gunship-tech-noir.mp3           — "Tech Noir" by GUNSHIP
   每两个场景共用一首 BGM，切换时 crossfade 渐变过渡。
 -->
 <html lang="zh-CN">
@@ -74,7 +74,7 @@ let menuSel=0,isTouchDevice=false;
 const LANE_COUNT=4;
 let lanes=[],currentLane=1,laneSwitchCooldown=0,laneWidth=0,roadLaneTop=0;
 let raceTotal=6,racePosition=6,prevPosition=6,posChangeFx=0,posChangeDir=0;
-let speedPenalty=0;
+let playerSpeedKmh=170;
 let countdownTimer=0;
 let raceCars=[],playerCar=null,nextFinishOrder=0;
 let finishAnimTimer=0,finishTriggered=false;
@@ -82,8 +82,8 @@ const RACE_DIST=5000;
 let isJumping=false,jumpVel=0,jumpHeight=0;
 const JUMP_FORCE=520,JUMP_GRAVITY=1200;
 let prevCountdownSec=-1;
-let carHealth=100,throttle=0;
-const THROTTLE_PER_PRESS=0.13,THROTTLE_DECAY=0.35,THROTTLE_MAX=1.0;
+let carHealth=100;
+const CRUISE_SPEED=170,MAX_THROTTLE_SPEED=420,THROTTLE_BOOST=55,COLLISION_SPEED_LOSS=40;
 
 const ENVS=[
 {name:'棕榈树公路',end:2000,welcome:'出发！棕榈树公路'},
@@ -178,10 +178,10 @@ function mOut(){return masterComp||(audioCtx&&audioCtx.destination)}
 function mkDist(k){const n=256,c=new Float32Array(n);for(let i=0;i<n;i++){const x=i*2/n-1;c[i]=(Math.PI+k)*x/(Math.PI+k*Math.abs(x))}return c}
 
 const BGM_FILES=[
-'music/dreamwave-ambient.mp3',
-'music/nostalgic-synthwave.mp3',
-'music/retrowave-dream.mp3',
-'music/lofi-synthwave.mp3'
+'music/home-resonance.mp3',
+'music/kavinsky-nightcall.mp3',
+'music/perturbator-electric-dreams.mp3',
+'music/gunship-tech-noir.mp3'
 ];
 const BGM_VOL=0.55,BGM_FADE_MS=2500;
 function bgmTrack(i){return Math.floor((i||0)/2)}
@@ -368,7 +368,7 @@ sg.gain.setValueAtTime(0.06,now);sg.gain.exponentialRampToValueAtTime(0.001,now+
 sh.connect(sf);sf.connect(sg);sg.connect(out);sh.start(now);sh.stop(now+0.1)}
 
 function doJump(){if(!isJumping&&state==='play'&&activePU.jet<=0){isJumping=true;jumpVel=JUMP_FORCE;playJumpSound()}}
-function pumpThrottle(){if(state==='play'){throttle=Math.min(THROTTLE_MAX,throttle+THROTTLE_PER_PRESS)}}
+function pumpThrottle(){if(state==='play'){playerSpeedKmh=Math.min(MAX_THROTTLE_SPEED,playerSpeedKmh+THROTTLE_BOOST)}}
 
 function toggleMute(){
 soundMuted=!soundMuted;
@@ -532,7 +532,7 @@ state='play';score=0;gameTime=0;speedMul=1;distance=0;
 coinsCollected=0;overtakeCount=0;smashCount=0;maxSpd=0;surviveTime=0;
 currentLane=1;pY=lanes[1]||pYMin;holdUp=false;holdDown=false;laneSwitchCooldown=0;isJumping=false;jumpVel=0;jumpHeight=0;
 obstacles=[];coins=[];cFx=[];nitroPickups=[];powerups=[];smashFx=[];
-nitro=30;nitroActive=false;nitroTimer=0;superNitro=false;speedPenalty=0;carHealth=100;throttle=0;
+nitro=30;nitroActive=false;nitroTimer=0;superNitro=false;carHealth=100;playerSpeedKmh=CRUISE_SPEED;
 powerupTimer=0;activePU={speed:0,shield:0,autoNitro:0,jet:0};
 gear=1;displaySpd=0;
 aiCars=[];aiTimer=0;obsTimer=0;coinTimer=0;nitroPickTimer=0;
@@ -694,10 +694,11 @@ if(pts)overtakeFx.push({x:x+20,y:y-25,life:1,text:`+${pts}`,score:0,big:false});
 function updateGame(dt,spd){
 if(mode==='tournament'&&finishTriggered){
 finishAnimTimer-=dt;gameTime+=dt;
-speedMul*=Math.pow(0.08,dt);if(speedMul<0.02)speedMul=0.02;
-distance+=spd*dt*0.1;
+playerSpeedKmh=Math.max(5,playerSpeedKmh*Math.pow(0.08,dt));
+const effSpdFin=playerSpeedKmh/0.3;
+distance+=effSpdFin*dt*0.1;
 if(playerCar)playerCar.trackPos=distance;
-const curSpd=spd*.3;displaySpd+=(curSpd-displaySpd)*Math.min(1,8*dt);
+displaySpd+=(playerSpeedKmh-displaySpd)*Math.min(1,8*dt);
 const npcMul=Math.min(1+gameTime*0.008*(TRACKS[curTrack].diff||1),3.8);
 for(const car of raceCars){if(!car.isPlayer)car.updateAI(dt,npcMul,baseSpd,obstacles,raceCars)}
 if(finishAnimTimer<=0)completeLevel();
@@ -707,15 +708,12 @@ const diff=TRACKS[curTrack].diff||1;
 gameTime+=dt;surviveTime+=dt;
 speedMul=1+gameTime*.005*diff;
 if(speedMul>3.2)speedMul=3.2;
-throttle=Math.max(0,throttle-THROTTLE_DECAY*dt);
 carHealth=Math.min(100,carHealth+3*dt);
-const throttleFactor=0.2+0.8*throttle;
-const healthFactor=0.6+0.4*(carHealth/100);
 
-let effSpd=spd*throttleFactor*healthFactor;
-if(speedPenalty>0){speedPenalty-=dt;effSpd*=0.45}
+let nitroMul=1;
+let effSpd=playerSpeedKmh/0.3;
 if(nitroActive){
-nitroTimer-=dt;effSpd*=superNitro?3.5:2.5;
+nitroTimer-=dt;nitroMul=superNitro?2.5:1.8;effSpd*=nitroMul;
 if(!superNitro)nitro-=dt*30;
 if(nitroTimer<=0||(!superNitro&&nitro<=0)){nitroActive=false;nitroTimer=0;superNitro=false;nitro=Math.max(0,nitro)}
 const fp=superNitro?8:5;
@@ -725,11 +723,11 @@ vx:(-280-Math.random()*200)*(superNitro?1.4:1),vy:(Math.random()-.5)*(superNitro
 hue:superNitro?(Math.random()<.3?10:Math.random()<.6?40:60):(Math.random()<.5?30:50)});
 }
 if(Math.random()<.6)speedLines.push({x:W+10,y:Math.random()*H,len:80+Math.random()*180,life:1,sp:1000+Math.random()*600});
-}else if(speedMul>1.8&&Math.random()<speedMul*0.04){
+}else if(playerSpeedKmh>300&&Math.random()<0.04){
 speedLines.push({x:W+10,y:Math.random()*H,len:30+Math.random()*60,life:1,sp:500+Math.random()*300});
 }
 
-const curSpd=effSpd*.3;
+const curSpd=playerSpeedKmh*nitroMul;
 if(curSpd>displaySpd)displaySpd+=(curSpd-displaySpd)*Math.min(1,4*dt);
 else displaySpd+=(curSpd-displaySpd)*Math.min(1,8*dt);
 if(displaySpd>maxSpd)maxSpd=displaySpd;
@@ -855,9 +853,9 @@ continue;
 }
 const dmg=o.type==='barrier'?25:o.type==='rock'?20:15;
 carHealth=Math.max(0,carHealth-dmg);
-throttle*=0.15;
+playerSpeedKmh=Math.max(CRUISE_SPEED,playerSpeedKmh-COLLISION_SPEED_LOSS);
 nitro=Math.max(0,nitro-15);
-playCrashSound();speedPenalty=1.2;shakeAmt=Math.max(shakeAmt,.35);flashA=.2;flashC='255,80,30';
+playCrashSound();shakeAmt=Math.max(shakeAmt,.35);flashA=.2;flashC='255,80,30';
 obstacles.splice(i,1);
 overtakeFx.push({x:carX,y:carCY-20,life:1,text:'撞击！',score:0,big:false});
 continue;
@@ -917,9 +915,9 @@ overtakeFx.push({x:W*.5,y:H*.35,life:1.2,text:'撞飞！+500',score:500,big:true
 continue;
 }
 carHealth=Math.max(0,carHealth-20);
-throttle*=0.15;
+playerSpeedKmh=Math.max(CRUISE_SPEED,playerSpeedKmh-COLLISION_SPEED_LOSS);
 nitro=Math.max(0,nitro-15);
-playCrashSound();speedPenalty=1.2;shakeAmt=.3;flashA=.2;flashC='255,80,30';
+playCrashSound();shakeAmt=.3;flashA=.2;flashC='255,80,30';
 overtakeFx.push({x:carX,y:carCY-20,life:1,text:'撞击！',score:0,big:false});
 }}
 
@@ -2330,12 +2328,6 @@ cx.font=`bold ${Math.max(8,fs*.4)}px sans-serif`;
 cx.textAlign='center';cx.fillStyle='rgba(255,240,200,0.35)';
 cx.fillText('耐久',W/2,hbY+nbH+Math.max(8,fs*.4));
 
-if(speedPenalty>0){
-cx.font=`bold ${Math.max(14,fs*1.2)}px 'Microsoft YaHei','PingFang SC',sans-serif`;
-cx.fillStyle=`rgba(255,80,30,${.5+.3*Math.sin(t*8)})`;
-cx.fillText('减速中...',W/2,hbY+nbH+Math.max(22,fs*1.2));
-}
-
 let puCount=0;
 const puIconSz=Math.max(20,Math.min(W,H)*.028);
 for(const pk of PU_TYPES){
@@ -2699,16 +2691,13 @@ last=ts;t+=dt;
 let spd;
 if(state==='play')spd=baseSpd*speedMul;
 else if(state==='countdown')spd=0;
-else if(state==='gameover'||state==='levelcomplete'){speedMul*=Math.pow(.08,dt);if(speedMul<.015)speedMul=.015;spd=baseSpd*speedMul}
+else if(state==='gameover'||state==='levelcomplete'){playerSpeedKmh=Math.max(5,playerSpeedKmh*Math.pow(0.08,dt));spd=playerSpeedKmh/0.3}
 else spd=200*(1+Math.sin(t*.25)*.04);
 
 let effSpd=spd;
 if(state==='play'){
-const tF=0.2+0.8*throttle;
-const hF=0.6+0.4*(carHealth/100);
-effSpd*=tF*hF;
-if(speedPenalty>0)effSpd*=0.45;
-if(nitroActive)effSpd*=(superNitro?3.5:2.5);
+effSpd=playerSpeedKmh/0.3;
+if(nitroActive)effSpd*=(superNitro?2.5:1.8);
 }
 
 scroll+=effSpd*dt;
