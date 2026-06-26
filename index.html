@@ -176,9 +176,9 @@ function mOut(){return masterComp||(audioCtx&&audioCtx.destination)}
 function mkDist(k){const n=256,c=new Float32Array(n);for(let i=0;i<n;i++){const x=i*2/n-1;c[i]=(Math.PI+k)*x/(Math.PI+k*Math.abs(x))}return c}
 
 const BGM_FILES=[
-'music/home-resonance.mp3',
-'music/kavinsky-nightcall.mp3',
 'music/perturbator-electric-dreams.mp3',
+'music/kavinsky-nightcall.mp3',
+'music/home-resonance.mp3',
 'music/gunship-tech-noir.mp3'
 ];
 const BGM_VOL=0.55,BGM_FADE_MS=2500;
