@@ -1,11 +1,9 @@
 <!DOCTYPE html>
 <!--
   BGM Credits / 背景音乐来源:
-  1. home-resonance.mp3              — "Resonance" by HOME
-  2. kavinsky-nightcall.mp3          — "Nightcall" by Kavinsky
-  3. perturbator-electric-dreams.mp3 — "Electric Dreams" by Perturbator
-  4. gunship-tech-noir.mp3           — "Tech Noir" by GUNSHIP
-  每两个场景共用一首 BGM，切换时 crossfade 渐变过渡。
+  1. home-resonance.mp3  — "Resonance" by HOME（场景 1-7）
+  2. gunship-tech-noir.mp3 — "Tech Noir" by GUNSHIP（虚数空间）
+  进入虚数空间时 crossfade 过渡。
 -->
 <html lang="zh-CN">
 <head>
@@ -178,13 +176,11 @@ function mOut(){return masterComp||(audioCtx&&audioCtx.destination)}
 function mkDist(k){const n=256,c=new Float32Array(n);for(let i=0;i<n;i++){const x=i*2/n-1;c[i]=(Math.PI+k)*x/(Math.PI+k*Math.abs(x))}return c}
 
 const BGM_FILES=[
-'music/perturbator-electric-dreams.mp3',
-'music/kavinsky-nightcall.mp3',
 'music/home-resonance.mp3',
 'music/gunship-tech-noir.mp3'
 ];
 const BGM_VOL=0.55,BGM_FADE_MS=2500;
-function bgmTrack(i){return Math.floor((i||0)/2)}
+function bgmTrack(i){return (i||0)>=7?1:0}
 
 function onBGMEnded(){if(curEnvIdx===7&&state==='play'&&!bhActive){bhActive=true;bhTimer=0;bhParticles=[]}}
 function startBGM(themeIdx){
@@ -1368,86 +1364,39 @@ cx.fillStyle=mg;cx.fillRect(0,0,W,roadY);
 // ====== ENVIRONMENT SCENES ======
 
 function drawEnvPalm(off){
-const oceanY=roadY-H*0.22;
-const og=cx.createLinearGradient(0,oceanY-H*0.1,0,roadY);
-og.addColorStop(0,'#082848');
-og.addColorStop(0.15,'#0a3858');
-og.addColorStop(0.3,'#1a4860');
-og.addColorStop(0.5,'#2a5868');
-og.addColorStop(0.7,'#3a6868');
-og.addColorStop(0.85,'#4a7060');
-og.addColorStop(1,'#5a7050');
-cx.fillStyle=og;cx.fillRect(0,oceanY-H*0.1,W,roadY-oceanY+H*0.12);
-const sunReflX=W*0.62;
-const lightPath=cx.createRadialGradient(sunReflX,oceanY-H*0.05,0,sunReflX,roadY,W*0.35);
-lightPath.addColorStop(0,'rgba(255,220,120,0.30)');
-lightPath.addColorStop(0.15,'rgba(255,200,90,0.20)');
-lightPath.addColorStop(0.4,'rgba(255,170,60,0.10)');
-lightPath.addColorStop(1,'rgba(255,120,40,0)');
-cx.fillStyle=lightPath;cx.fillRect(0,oceanY-H*0.1,W,roadY-oceanY+H*0.12);
-const pathStripe=cx.createLinearGradient(sunReflX-W*0.12,0,sunReflX+W*0.12,0);
-pathStripe.addColorStop(0,'rgba(255,200,100,0)');
-pathStripe.addColorStop(0.5,'rgba(255,220,130,0.12)');
-pathStripe.addColorStop(1,'rgba(255,200,100,0)');
-cx.fillStyle=pathStripe;cx.fillRect(sunReflX-W*0.12,oceanY,W*0.24,roadY-oceanY);
-for(let x=0;x<W;x+=3){for(let wy=oceanY;wy<roadY-H*0.03;wy+=6){
-if(hash(x*7+wy*13+Math.floor(t*2))>0.993){
-const distFromSun=Math.abs(x-sunReflX)/W;
-const sparkle=distFromSun<0.12?0.7:0.3;
-cx.fillStyle=`rgba(255,255,220,${sparkle+hash(x*3+wy)*0.3})`;
-cx.fillRect(x,wy,2,1)}}}
-for(let w=0;w<5;w++){const wy=oceanY+w*H*0.04;
-cx.strokeStyle=`rgba(255,255,255,${w<2?0.3:0.15})`;cx.lineWidth=w<2?1.5:1;
-cx.beginPath();for(let x=-10;x<=W+10;x+=3)cx.lineTo(x,wy+Math.sin((x+off*0.25+w*100)*0.015+t*2)*5+Math.sin(x*0.008+t*1.2)*2);cx.stroke();
-if(w<3){cx.fillStyle='rgba(255,255,255,0.06)';cx.beginPath();
-for(let x=-10;x<=W+10;x+=3)cx.lineTo(x,wy+Math.sin((x+off*0.25+w*100)*0.015+t*2)*5);
-for(let x=W+10;x>=-10;x-=3)cx.lineTo(x,wy+3);cx.closePath();cx.fill()}}
-const VI_SPAN=3*800;const viOff=(off*0.02)%VI_SPAN;
-for(let i=0;i<3;i++){const pos=i*800;
-let ix=((pos-viOff)%VI_SPAN+VI_SPAN)%VI_SPAN-100;
-if(ix<-120||ix>W+120)continue;
-const iy=oceanY-H*0.08+hash(i+600)*H*0.04;
-cx.fillStyle='#1a1028';
-cx.beginPath();
-const iw=80+hash(i+610)*60;const ih=H*0.08+hash(i+620)*H*0.06;
-cx.moveTo(ix-iw,iy+ih*0.3);
-for(let x=0;x<=iw*2;x+=4){
-const peak=Math.sin((x/iw/2)*Math.PI)*ih+fbm((x+ix)*0.005,3,i*100)*ih*0.3;
-cx.lineTo(ix-iw+x,iy+ih*0.3-peak)}
-cx.lineTo(ix+iw,iy+ih*0.3);cx.closePath();cx.fill();
-if(hash(i+630)>0.4){cx.fillStyle='rgba(200,60,30,0.15)';
-const vx=ix+hash(i+640)*iw*0.5-iw*0.25;
-cx.beginPath();cx.moveTo(vx,iy+ih*0.3-ih*0.8);cx.lineTo(vx-8,iy+ih*0.3-ih*0.6);cx.lineTo(vx+8,iy+ih*0.3-ih*0.6);cx.closePath();cx.fill();
-cx.fillStyle='rgba(180,80,40,0.08)';cx.beginPath();cx.ellipse(vx,iy+ih*0.3-ih*0.85,6,3,0,0,6.2832);cx.fill()}
-cx.fillStyle='rgba(255,180,80,0.06)';cx.beginPath();
-cx.moveTo(ix-iw*0.4,iy+ih*0.3-ih*0.5);
-cx.lineTo(ix-iw*0.1,iy+ih*0.3-ih*0.8);
-cx.lineTo(ix+iw*0.2,iy+ih*0.3-ih*0.6);
-cx.lineTo(ix+iw*0.3,iy+ih*0.3);cx.closePath();cx.fill()}
+const horizY=roadY-H*0.05;
+const sunX=W*0.62;
+const reflG=cx.createRadialGradient(sunX,horizY,0,sunX,roadY,W*0.3);
+reflG.addColorStop(0,'rgba(255,220,120,0.25)');
+reflG.addColorStop(0.2,'rgba(255,200,90,0.15)');
+reflG.addColorStop(0.5,'rgba(255,170,60,0.06)');
+reflG.addColorStop(1,'rgba(255,140,40,0)');
+cx.fillStyle=reflG;cx.fillRect(0,horizY-H*0.02,W,roadY-horizY+H*0.04);
+const stripe=cx.createLinearGradient(sunX-W*0.08,0,sunX+W*0.08,0);
+stripe.addColorStop(0,'rgba(255,200,100,0)');
+stripe.addColorStop(0.5,'rgba(255,220,130,0.10)');
+stripe.addColorStop(1,'rgba(255,200,100,0)');
+cx.fillStyle=stripe;cx.fillRect(sunX-W*0.08,horizY,W*0.16,roadY-horizY);
+cx.strokeStyle='rgba(255,255,255,0.08)';cx.lineWidth=1;
+cx.beginPath();for(let x=-10;x<=W+10;x+=4)cx.lineTo(x,horizY+1+Math.sin((x+off*0.1)*0.02+t*1.5)*2);cx.stroke();
 cx.fillStyle='#c8a060';cx.beginPath();cx.moveTo(-2,roadY+2);
 for(let x=-2;x<=W+2;x+=3)cx.lineTo(x,roadY-3-Math.sin((x+off*0.12)*0.01)*4);
 cx.lineTo(W+2,roadY+2);cx.closePath();cx.fill();
-cx.fillStyle='rgba(255,255,255,0.12)';cx.beginPath();
-for(let x=-2;x<=W+2;x+=3){const edge=roadY-3-Math.sin((x+off*0.12)*0.01)*4;
-cx.lineTo(x,edge-2-Math.sin(x*0.05+t*3)*2.5*(Math.sin((x+off*0.12)*0.01)>0?1:0.3))}
-for(let x=W+2;x>=-2;x-=3)cx.lineTo(x,roadY-3-Math.sin((x+off*0.12)*0.01)*4);cx.closePath();cx.fill();
 const PT_SPAN=8*320+180;const ptOff=(off*0.35)%PT_SPAN;
 for(let i=0;i<8;i++){const pos=i*320+hash(i+200)*180;
 let px=((pos-ptOff)%PT_SPAN+PT_SPAN)%PT_SPAN-80;
 if(px<-100||px>W+100)continue;
-const h=65+hash(i+210)*50,lean2=(hash(i+220)-0.4)*28;
+const h=70+hash(i+210)*55,lean2=(hash(i+220)-0.4)*30;
 const topX2=px+lean2,topY2=roadY-h;
-cx.strokeStyle='#3a2018';cx.lineWidth=6;
+cx.strokeStyle='#1a0c06';cx.lineWidth=5;
 cx.beginPath();cx.moveTo(px,roadY);cx.quadraticCurveTo(px+lean2*0.5,roadY-h*0.5,topX2,topY2);cx.stroke();
-cx.strokeStyle='rgba(255,200,80,0.06)';cx.lineWidth=1.5;
-cx.beginPath();cx.moveTo(px+3,roadY);cx.quadraticCurveTo(px+lean2*0.5+3,roadY-h*0.5,topX2+2,topY2);cx.stroke();
-cx.fillStyle='#18100a';
-for(let f=0;f<7;f++){const ba=-Math.PI*0.7+(f/6)*Math.PI*1.9,fl=h*0.38,sway2=Math.sin(t*1.3+i*2+f)*6;
+cx.fillStyle='#0e0804';
+for(let f=0;f<7;f++){const ba=-Math.PI*0.7+(f/6)*Math.PI*1.9,fl=h*0.4,sway2=Math.sin(t*1.3+i*2+f)*6;
 cx.beginPath();cx.moveTo(topX2,topY2);
 cx.quadraticCurveTo(topX2+Math.cos(ba)*fl*0.5+sway2,topY2+Math.sin(ba)*fl*0.3-12,topX2+Math.cos(ba)*fl+sway2*2,topY2+Math.sin(ba)*fl*0.5+fl*0.2);
 cx.quadraticCurveTo(topX2+Math.cos(ba)*fl*0.5+sway2+2,topY2+Math.sin(ba)*fl*0.3-9,topX2+1,topY2+2);
 cx.closePath();cx.fill()}
-for(let c=0;c<3;c++){cx.fillStyle='#3a2818';cx.beginPath();cx.arc(topX2+(c-1)*4,topY2+5,3.5,0,6.2832);cx.fill()}}
+for(let c=0;c<3;c++){cx.fillStyle='#2a1810';cx.beginPath();cx.arc(topX2+(c-1)*4,topY2+5,3.5,0,6.2832);cx.fill()}}
 }
 
 function drawEnvCity(off,dp){
@@ -1671,30 +1620,27 @@ for(let x=-10;x<=W+10;x+=3)cx.lineTo(x,wy+Math.sin((x*0.01+t*1.8+w*2))*4);cx.str
 
 function drawEnvCoast(off){
 const oceanY=roadY-H*0.20;
-const og=cx.createLinearGradient(0,oceanY-H*0.25,0,roadY);
-og.addColorStop(0,'#081830');
-og.addColorStop(0.12,'#0c2040');
-og.addColorStop(0.25,'#123050');
-og.addColorStop(0.4,'#1a4058');
-og.addColorStop(0.55,'#285060');
-og.addColorStop(0.7,'#386058');
-og.addColorStop(0.85,'#4a6848');
-og.addColorStop(1,'#5a6840');
-cx.fillStyle=og;cx.fillRect(0,oceanY-H*0.25,W,roadY-oceanY+H*0.27);
+const og=cx.createLinearGradient(0,oceanY-H*0.1,0,roadY);
+og.addColorStop(0,'#0a3050');
+og.addColorStop(0.2,'#145868');
+og.addColorStop(0.4,'#1a7080');
+og.addColorStop(0.6,'#288878');
+og.addColorStop(0.8,'#3a9870');
+og.addColorStop(1,'#4a9060');
+cx.fillStyle=og;cx.fillRect(0,oceanY-H*0.1,W,roadY-oceanY+H*0.12);
 const sunReflX=W*0.6;
-const sunRefl=cx.createRadialGradient(sunReflX,oceanY,0,sunReflX,roadY,W*0.4);
-sunRefl.addColorStop(0,'rgba(255,220,120,0.30)');
-sunRefl.addColorStop(0.15,'rgba(255,200,90,0.20)');
-sunRefl.addColorStop(0.35,'rgba(255,170,60,0.10)');
-sunRefl.addColorStop(0.6,'rgba(255,140,40,0.04)');
-sunRefl.addColorStop(1,'rgba(255,100,30,0)');
+const sunRefl=cx.createRadialGradient(sunReflX,oceanY-H*0.05,0,sunReflX,roadY,W*0.35);
+sunRefl.addColorStop(0,'rgba(255,230,140,0.30)');
+sunRefl.addColorStop(0.15,'rgba(255,210,100,0.20)');
+sunRefl.addColorStop(0.4,'rgba(255,180,70,0.08)');
+sunRefl.addColorStop(1,'rgba(255,140,40,0)');
 cx.fillStyle=sunRefl;cx.fillRect(0,oceanY-H*0.1,W,roadY-oceanY+H*0.12);
 const goldPath=cx.createLinearGradient(sunReflX-W*0.1,0,sunReflX+W*0.1,0);
 goldPath.addColorStop(0,'rgba(255,200,100,0)');
 goldPath.addColorStop(0.5,'rgba(255,220,130,0.14)');
 goldPath.addColorStop(1,'rgba(255,200,100,0)');
 cx.fillStyle=goldPath;cx.fillRect(sunReflX-W*0.1,oceanY,W*0.2,roadY-oceanY);
-for(let x=0;x<W;x+=3){for(let wy=oceanY-H*0.08;wy<roadY-H*0.03;wy+=6){
+for(let x=0;x<W;x+=3){for(let wy=oceanY;wy<roadY-H*0.03;wy+=6){
 if(hash(x*7+wy*13+Math.floor(t*2))>0.993){
 const distFromSun=Math.abs(x-sunReflX)/W;
 const sparkle=distFromSun<0.12?0.7:0.3;
@@ -1708,9 +1654,9 @@ const iy=oceanY-H*0.02+hash(i+700)*H*0.05;
 const iw2=60+hash(i+710)*80;const ih2=H*0.05+hash(i+720)*H*0.04;
 cx.fillStyle='#1a1828';cx.beginPath();
 cx.moveTo(ix-iw2,iy);
-for(let x=0;x<=iw2*2;x+=3){const pk=Math.sin((x/iw2/2)*Math.PI)*ih2;cx.lineTo(ix-iw2+x,iy-pk)}
+for(let x=0;x<=iw2*2;x+=3){const pk=Math.sin((x/iw2/2)*Math.PI)*ih2+fbm((x+ix)*0.006,2,i*50)*ih2*0.2;cx.lineTo(ix-iw2+x,iy-pk)}
 cx.lineTo(ix+iw2,iy);cx.closePath();cx.fill();
-cx.fillStyle='rgba(255,180,80,0.06)';cx.beginPath();
+cx.fillStyle='rgba(255,180,80,0.05)';cx.beginPath();
 cx.moveTo(ix-iw2*0.3,iy-ih2*0.6);cx.lineTo(ix,iy-ih2);cx.lineTo(ix+iw2*0.3,iy-ih2*0.5);cx.lineTo(ix+iw2*0.2,iy);cx.closePath();cx.fill();
 for(let p=0;p<3;p++){
 const palmX=ix-iw2*0.3+hash(i*10+p)*iw2*0.6;
@@ -1723,17 +1669,11 @@ cx.beginPath();cx.moveTo(palmX,iy-ih2*0.7-palmH);
 cx.quadraticCurveTo(palmX+Math.cos(fa)*palmH*0.4,iy-ih2*0.7-palmH+Math.sin(fa)*palmH*0.2-3,
 palmX+Math.cos(fa)*palmH*0.5,iy-ih2*0.7-palmH+Math.sin(fa)*palmH*0.3+palmH*0.15);
 cx.stroke()}}}
-for(let w=0;w<6;w++){const wy=oceanY+w*H*0.035;
-cx.strokeStyle=`rgba(255,255,255,${w<2?0.35:0.2})`;cx.lineWidth=w<2?2:1.5;
-cx.beginPath();for(let x=-10;x<=W+10;x+=3)cx.lineTo(x,wy+Math.sin((x+off*0.3+w*120)*0.018+t*2.2)*6+Math.sin((x*0.007+t*1.3)*3)*2);cx.stroke();
-if(w<3){cx.fillStyle='rgba(255,255,255,0.08)';cx.beginPath();
-for(let x=-10;x<=W+10;x+=3){const wh=Math.sin((x+off*0.3+w*120)*0.018+t*2.2)*6;cx.lineTo(x,wy+wh)}
-for(let x=W+10;x>=-10;x-=3)cx.lineTo(x,wy+3);cx.closePath();cx.fill()}}
 const SB_SPAN=5*600+300;const sbOff=(off*0.04)%SB_SPAN;
 for(let i=0;i<5;i++){const pos=i*600+hash(i+500)*300;
 let sx=((pos-sbOff)%SB_SPAN+SB_SPAN)%SB_SPAN-100;
 if(sx<-60||sx>W+60)continue;
-const sy=oceanY-H*0.04+hash(i+510)*H*0.08;const bob=Math.sin(t*1.2+i*2)*3;
+const sy=oceanY+H*0.02+hash(i+510)*H*0.06;const bob=Math.sin(t*1.2+i*2)*3;
 cx.fillStyle='rgba(255,250,240,0.5)';cx.beginPath();cx.moveTo(sx,sy+bob-18);cx.lineTo(sx+2,sy+bob);cx.lineTo(sx-10,sy+bob);cx.closePath();cx.fill();
 cx.fillStyle='rgba(60,45,30,0.4)';cx.fillRect(sx-5,sy+bob,10,4);
 cx.fillStyle='rgba(255,220,160,0.15)';cx.beginPath();cx.moveTo(sx,sy+bob-18);cx.lineTo(sx+1,sy+bob-3);cx.lineTo(sx-1,sy+bob-3);cx.closePath();cx.fill()}
